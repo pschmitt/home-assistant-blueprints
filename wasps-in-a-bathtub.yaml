@@ -1,5 +1,5 @@
 blueprint:
-  name: Wasps in a bathtub
+  name: Wasps in tub
   description: Bathroom presence detection
   domain: automation
 
@@ -46,6 +46,7 @@ blueprint:
         # target:
         #   entity:
         #     domain: light
+    # FIXME This should be a simple event, rather than an input_boolean value
     input_occupancy:
       name: 🚾 input_boolean that holds the current occupancy state
       description: "Needs to be created beforehand"
@@ -89,6 +90,7 @@ variables:
   target_light: !input target_light
   shower_sensor: !input shower_sensor
 
+  # FIXME This should be a simple event, rather than an input_boolean value
   input_occupancy: !input input_occupancy
   input_timeout: !input input_timeout
   input_timer: !input input_timer
@@ -96,13 +98,15 @@ variables:
   ttl: !input ttl
 
 trigger:
+# FIXME This should be a simple event, rather than an input_boolean value
 - platform: state
   entity_id: !input input_occupancy
   id: occupancy_detected
   to: 'on'
+# FIXME This should be a simple event, rather than an input_boolean value
 - platform: state
   entity_id: !input input_occupancy
-  id: occupancy_not_detected
+  id: occupancy_off
   to: 'off'
 - platform: state
   entity_id: !input motion_sensor
@@ -112,18 +116,6 @@ trigger:
   entity_id: !input motion_sensor
   id: motion_off
   to: 'off'
-# - platform: state
-#   entity_id: !input motion_sensor
-#   id: motion_detected_long
-#   to: 'on'
-#   for:
-#     seconds: '{{ motion_sensor_cooldown + 1 }}'
-# - platform: state
-#   entity_id: !input motion_sensor
-#   id: no_motion_long
-#   to: 'off'
-#   for:
-#     minutes: 30
 - id: showering
   platform: state
   entity_id: !input shower_sensor
@@ -149,6 +141,10 @@ trigger:
   entity_id: !input target_light
   id: light_turned_off
   to: 'off'
+# TODO React to this change. If timer running -> set it to the new value
+- platform: state
+  entity_id: !input input_timeout
+  id: timer_value_changed
 
 condition: []
 
@@ -163,9 +159,8 @@ action:
       data:
         name: '{{ blueprint_name }}@{{ room_name }}'
         message: 'Motion detected'
-        # Optional
-        entity_id: !input input_occupancy
-        domain: input_boolean
+        entity_id: !input target_light
+        domain: light
     - service: light.turn_on
       # target: !input target_light
       data:
@@ -177,6 +172,7 @@ action:
           entity_id: !input door_sensor
           state: "off"
         sequence:
+        # FIXME Fire an event here instead
         - service: input_boolean.turn_on
           target:
             entity_id: !input input_occupancy
@@ -197,17 +193,16 @@ action:
             condition: state
             entity_id: !input shower_sensor
             state: 'off'
-          # - alias: "Timer is running"
-          #   condition: state
-          #   entity_id: !input input_timer
-          #   state: "active"
+          - alias: "Timer is running"
+            condition: state
+            entity_id: !input input_timer
+            state: "active"
         - service: logbook.log
           data:
             name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'timer (re)started'
-            # Optional
-            entity_id: !input input_occupancy
-            domain: input_boolean
+            message: 'timer (re)started, cause: motion detected, door open, light on, not showering and timer running'
+            entity_id: !input target_light
+            domain: light
         - service: timer.start
           data:
             duration: '00:{{ states(input_timeout) | int }}:00'
@@ -240,6 +235,7 @@ action:
       target:
         entity_id: !input input_timer
 
+  # FIXME This should be a simple event, rather than an input_boolean value
   - conditions:
     - alias: "Occupancy detected"
       condition: trigger
@@ -249,25 +245,29 @@ action:
       # target: !input target_light
       data:
         entity_id: !input target_light
+    - alias: "Timer is currently running"
+      condition: state
+      entity_id: !input input_timer
+      state: "active"
+    - service: logbook.log
+      data:
+        name: '{{ blueprint_name }}@{{ room_name }}'
+        message: 'timer cancelled, cause: occupancy detected'
+        entity_id: !input target_light
+        domain: light
     - service: timer.cancel
       target:
         entity_id: !input input_timer
 
+  # FIXME This should be a simple event, rather than an input_boolean value
   - conditions:
-    - alias: "Occupancy NOT detected"
+    - alias: "Occupancy no longer detected"
       condition: trigger
-      id: occupancy_not_detected
+      id: occupancy_off
     sequence:
     - condition: state
       entity_id: !input target_light
       state: 'on'
-    - service: logbook.log
-      data:
-        name: '{{ blueprint_name }}@{{ room_name }}'
-        message: 'timer (re)started'
-        # Optional
-        entity_id: !input input_occupancy
-        domain: input_boolean
     - condition: and
       conditions:
       - alias: "Light is on"
@@ -278,6 +278,20 @@ action:
         condition: state
         entity_id: !input shower_sensor
         state: 'off'
+      # FIXME: Below is nice but does not work when the timer is currently not running!
+      # - alias: "Remaining timer time is more than input_timeout value"
+      #   condition: template
+      #   value_template: >-
+      #     {{
+      #       as_timestamp(state_attr(input_timer, "finishes_at"))
+      #       >
+      #       (as_timestamp(now()) + ((states(input_timeout) | int) | default(60))) }}
+    - service: logbook.log
+      data:
+        name: '{{ blueprint_name }}@{{ room_name }}'
+        message: 'timer (re)started, cause: occupancy off, light on, shower off, timer > input_timeout'
+        entity_id: !input target_light
+        domain: light
     - service: timer.start
       data:
         duration: '00:{{ states(input_timeout) | int }}:00'
@@ -296,9 +310,9 @@ action:
       data:
         name: '{{ blueprint_name }}@{{ room_name }}'
         message: 'door opened'
-        # Optional
-        entity_id: !input input_occupancy
-        domain: input_boolean
+        entity_id: !input target_light
+        domain: light
+    # FIXME Fire an event here instead
     - service: input_boolean.turn_off
       target:
         entity_id: !input input_occupancy
@@ -311,14 +325,12 @@ action:
     # Here we should wait for motion, and turn on occupancy accordingly
     # but this is already handled in the motion detection block (we check the
     # door state there)
-    # TODO Check if motion detected stays on after the door was closed!
     - service: logbook.log
       data:
         name: '{{ blueprint_name }}@{{ room_name }}'
         message: 'door closed'
-        entity_id: !input input_occupancy
-        domain: input_boolean
-    # FIXME TEST
+        entity_id: !input target_light
+        domain: light
     - alias: "Wait for motion sensor to turn off"
       wait_for_trigger:
         - platform: state
@@ -338,8 +350,9 @@ action:
           data:
             name: '{{ blueprint_name }}@{{ room_name }}'
             message: 'occupancy detected (long lasting motion detection)'
-            entity_id: !input input_occupancy
-            domain: input_boolean
+            entity_id: !input target_light
+            domain: light
+        # FIXME Fire an event here instead
         - alias: "Motion sensor didn't stop registering motion -> occupancy"
           service: input_boolean.turn_on
           target:
@@ -358,17 +371,27 @@ action:
             condition: state
             entity_id: !input shower_sensor
             state: 'off'
-          - alias: "Timer is currently running"
-            condition: state
-            entity_id: !input input_timer
-            state: "active"
-          - alias: "Remaining timer time is more than ttl value"
-            condition: template
-            value_template: >-
-              {{
-                as_timestamp(state_attr(input_timer, "finishes_at"))
-                >
-                (as_timestamp(now()) + ((ttl | int) | default(60))) }}
+          # FIXME: This should be:
+          # if timer not active -> true;
+          # else if timer > ttl -> true
+          # - alias: "Timer is currently running"
+          #   condition: state
+          #   entity_id: !input input_timer
+          #   state: "active"
+          # - alias: "Remaining timer time is more than ttl value"
+          #   condition: template
+          #   value_template: >-
+          #     {{
+          #       as_timestamp(state_attr(input_timer, "finishes_at"))
+          #       >
+          #       (as_timestamp(now()) + ((ttl | int) | default(60))) }}
+        - alias: "Log timer (re)start"
+          service: logbook.log
+          data:
+            name: '{{ blueprint_name }}@{{ room_name }}'
+            message: 'timer restarted, cause: door closed, motion off, shower off, remaining time > ttl'
+            entity_id: !input target_light
+            domain: light
         - service: timer.start
           data:
             duration: '{{ (ttl | int) | default(60) }}'
@@ -399,6 +422,13 @@ action:
             condition: state
             entity_id: !input shower_sensor
             state: 'off'
+        - alias: "Log timer (re)start"
+          service: logbook.log
+          data:
+            name: '{{ blueprint_name }}@{{ room_name }}'
+            message: 'timer (re)started, cause: timer finished, motion on'
+            entity_id: !input target_light
+            domain: light
         - service: timer.start
           data:
             duration: '00:{{ states(input_timeout) | int }}:00'
@@ -409,9 +439,8 @@ action:
         data:
           name: '{{ blueprint_name }}@{{ room_name }}'
           message: 'timed out, lights off! (on time: {{ relative_time(states[target_light].last_changed) }})'
-          # Optional
-          entity_id: !input input_occupancy
-          domain: input_boolean
+          entity_id: !input target_light
+          domain: light
       - service: light.turn_off
         # target: !input target_light
         data:
@@ -428,6 +457,7 @@ action:
     - service: timer.cancel
       target:
         entity_id: !input input_timer
+    # FIXME Fire an event here
     - service: input_boolean.turn_off
       target:
         entity_id: !input input_occupancy
@@ -441,9 +471,8 @@ action:
       data:
         name: '{{ blueprint_name }}@{{ room_name }}'
         message: 'Someone is showering. Cancelling timer'
-        # Optional
-        entity_id: !input input_occupancy
-        domain: input_boolean
+        entity_id: !input target_light
+        domain: light
     - service: timer.cancel
       target:
         entity_id: !input input_timer
@@ -459,17 +488,12 @@ action:
         condition: state
         entity_id: !input target_light
         state: 'on'
-      - alias: "Door is open"
-        condition: state
-        entity_id: !input door_sensor
-        state: "on"
     - service: logbook.log
       data:
         name: '{{ blueprint_name }}@{{ room_name }}'
-        message: 'Shower sensor turned off and door is open, starting timer'
-        # Optional
-        entity_id: !input input_occupancy
-        domain: input_boolean
+        message: 'Shower sensor turned off, starting timer'
+        entity_id: !input target_light
+        domain: light
     - service: timer.start
       data:
         duration: '00:{{ states(input_timeout) | int }}:00'
