@@ -161,10 +161,17 @@ action:
         message: 'Motion detected'
         entity_id: !input target_light
         domain: light
-    - service: light.turn_on
-      # target: !input target_light
-      data:
-        entity_id: !input target_light
+    - if:
+        - alias: "If the light is currently off, turn it on"
+          condition: state
+          entity_id: !input target_light
+          state: "off"
+      then:
+        - alias: "Turn light on"
+          service: light.turn_on
+          # target: !input target_light
+          data:
+            entity_id: !input target_light
     - choose:
       - conditions:
         - alias: "Door closed"
@@ -241,23 +248,32 @@ action:
       condition: trigger
       id: occupancy_detected
     sequence:
-    - service: light.turn_on
-      # target: !input target_light
-      data:
-        entity_id: !input target_light
-    - alias: "Timer is currently running"
-      condition: state
-      entity_id: !input input_timer
-      state: "active"
-    - service: logbook.log
-      data:
-        name: '{{ blueprint_name }}@{{ room_name }}'
-        message: 'timer cancelled, cause: occupancy detected'
-        entity_id: !input target_light
-        domain: light
-    - service: timer.cancel
-      target:
-        entity_id: !input input_timer
+    - if:
+        - alias: "If the light is currently off, turn it on"
+          condition: state
+          entity_id: !input target_light
+          state: "off"
+      then:
+      - alias: "Turn on light"
+        service: light.turn_on
+        # target: !input target_light
+        data:
+          entity_id: !input target_light
+    - if:
+        - alias: "Timer is currently running"
+          condition: state
+          entity_id: !input input_timer
+          state: "active"
+      then:
+        - service: logbook.log
+          data:
+            name: '{{ blueprint_name }}@{{ room_name }}'
+            message: 'timer cancelled, cause: occupancy detected'
+            entity_id: !input target_light
+            domain: light
+        - service: timer.cancel
+          target:
+            entity_id: !input input_timer
 
   # FIXME This should be a simple event, rather than an input_boolean value
   - conditions:
@@ -303,9 +319,16 @@ action:
       condition: trigger
       id: door_opened
     sequence:
-    - service: light.turn_on
-      data:
-        entity_id: !input target_light
+    - if:
+        - alias: "If the light is currently off, turn it on"
+          condition: state
+          entity_id: !input target_light
+          state: "off"
+      then:
+        - alias: "Turn light on"
+          service: light.turn_on
+          data:
+            entity_id: !input target_light
     - service: logbook.log
       data:
         name: '{{ blueprint_name }}@{{ room_name }}'
