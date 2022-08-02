@@ -196,10 +196,11 @@ action:
             condition: state
             entity_id: !input target_light
             state: 'on'
-          - alias: "Shower sensor is off"
-            condition: state
-            entity_id: !input shower_sensor
-            state: 'off'
+          - not:
+            - alias: "Shower sensor is not on"
+              condition: state
+              entity_id: !input shower_sensor
+              state: 'on'
           - alias: "Timer is running"
             condition: state
             entity_id: !input input_timer
@@ -232,10 +233,11 @@ action:
         condition: state
         entity_id: !input target_light
         state: 'on'
-      - alias: "Shower sensor is off"
-        condition: state
-        entity_id: !input shower_sensor
-        state: 'off'
+      - not:
+        - alias: "Shower sensor is not on"
+          condition: state
+          entity_id: !input shower_sensor
+          state: 'on'
     - service: timer.start
       data:
         duration: '00:{{ states(input_timeout) | int }}:00'
@@ -290,10 +292,11 @@ action:
         condition: state
         entity_id: !input target_light
         state: 'on'
-      - alias: "Shower sensor is off"
-        condition: state
-        entity_id: !input shower_sensor
-        state: 'off'
+      - not:
+        - alias: "Shower sensor is not on"
+          condition: state
+          entity_id: !input shower_sensor
+          state: 'on'
       # FIXME: Below is nice but does not work when the timer is currently not running!
       # - alias: "Remaining timer time is more than input_timeout value"
       #   condition: template
@@ -390,10 +393,11 @@ action:
         # (re)start timer if currently running
         - condition: and
           conditions:
-          - alias: "Shower sensor is off"
-            condition: state
-            entity_id: !input shower_sensor
-            state: 'off'
+          - not:
+            - alias: "Shower sensor is not on"
+              condition: state
+              entity_id: !input shower_sensor
+              state: 'on'
           # FIXME: This should be:
           # if timer not active -> true;
           # else if timer > ttl -> true
@@ -441,10 +445,11 @@ action:
             condition: state
             entity_id: !input target_light
             state: 'on'
-          - alias: "Shower sensor is off"
-            condition: state
-            entity_id: !input shower_sensor
-            state: 'off'
+          - not:
+            - alias: "Shower sensor is not on"
+              condition: state
+              entity_id: !input shower_sensor
+              state: 'on'
         - alias: "Log timer (re)start"
           service: logbook.log
           data:
