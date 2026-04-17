@@ -1,80 +1,102 @@
 blueprint:
-  name: "🐝 Wasps in tub"
-  description: Bathroom presence detection
+  name: "🐝 Wasps in tub (multi-sensor, CSV cooldowns)"
+  description: Bathroom presence detection with motion/occupancy sensors and per-sensor cooldowns (CSV, mandatory)
   domain: automation
 
   input:
     room_name:
       name: 📛 Room name
-      description: "Room name, eg: bathroom"
+      description: "Room name, eg: master bathroom"
+
     door_sensor:
       name: 🚪 Door sensor
-      description: Box sensor
       selector:
         entity:
           domain: binary_sensor
           device_class: door
-    motion_sensor:
-      name: 🏃 Motion Sensor
-      description: Wasp sensor
+
+    activity_sensors:
+      name: 🏃‍➡️ Activity sensors (motion / occupancy only)
+      description: "Select all sensors that indicate activity"
       selector:
         entity:
-          domain: binary_sensor
-          device_class: 
-          - motion
-          - occupancy
-    motion_sensor_cooldown:
-      name: 🥶 Motion sensor cooldown period
-      description: How often does the motion sensor report motion events?
+          multiple: true
+          filter:
+            - domain: binary_sensor
+              device_class:
+                - motion
+                - occupancy
+
+    motion_cooldowns_csv:
+      name: 🧊 Per-sensor cooldowns (CSV) — REQUIRED
+      description: |
+        Comma-separated integers **aligned to the order of Activity sensors**.
+        If you provide **exactly one** value (e.g. `10`), it is used for **all** sensors.
+        If you provide multiple values and fewer than your sensors, the **last** value is reused for the rest.
+        Examples:
+          - `10`           → all sensors use 10s
+          - `5, 8, 60`     → S1=5s, S2=8s, S3=60s
+          - `5, 8` (3 sensors) → S1=5s, S2=8s, S3=8s
       selector:
-        number:
-          min: 1
-          max: 300
-          step: 1
-          unit_of_measurement: seconds
-    shower_sensor:
-      name: 🚿 Shower Sensor
-      description: Shower sensor
-      selector:
-        entity:
-          domain: binary_sensor
-          device_class: occupancy
+        text: {}
+      default: ""
+
     target_light:
       name: 💡 Light to control
-      description: "Any light or light group"
       selector:
         entity:
           domain: light
+
     input_occupancy:
       name: 🚾 input_boolean that holds the current occupancy state
-      description: "Needs to be created beforehand"
       selector:
         entity:
           domain: input_boolean
+
     input_timer:
       name: 🕝 timer that gets started when no occupancy is detected anymore
-      description: "Needs to be created beforehand"
       selector:
         entity:
           domain: timer
+
     input_timeout:
       name: 🔢 input_number (minutes) for auto-off after occupancy ends / door-open motion
-      description: "Needs to be created beforehand"
       selector:
         entity:
           domain: input_number
+
+    illuminance_sensor:
+      name: 🌞 Illuminance sensor (optional)
+      description: If set, the light will only turn on when illuminance is below the cutoff
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    illuminance_cutoff:
+      name: 🌞 Illuminance cutoff (lx)
+      description: Do not turn on the light when the measured illuminance is at or above this value
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 1
+          unit_of_measurement: lx
+          mode: slider
+
     ttl:
-      name: 🌙 Time-to-Live
-      description: How long to keep the lights on after leaving
+      name: 🌙 Time-to-Live (seconds) after door closes
       selector:
         number:
           min: 0
           max: 3600
           step: 1
           unit_of_measurement: seconds
+      default: 65
 
-mode: queued
-max: 10
+mode: restart
 trace:
   stored_traces: 25
 
@@ -83,70 +105,104 @@ variables:
   room_name: !input room_name
 
   door_sensor: !input door_sensor
-  motion_sensor: !input motion_sensor
-  target_light: !input target_light
-  shower_sensor: !input shower_sensor
+  activity_sensors: !input activity_sensors
+  motion_cooldowns_csv: !input motion_cooldowns_csv
 
+  target_light: !input target_light
   input_occupancy: !input input_occupancy
   input_timeout: !input input_timeout
   input_timer: !input input_timer
-  motion_sensor_cooldown: !input motion_sensor_cooldown
+
+  illuminance_sensor: !input illuminance_sensor
+  illuminance_cutoff: !input illuminance_cutoff
+
   ttl: !input ttl
 
-  # Derived state at trigger time
+  # --- Derived state ---
   is_light_on: "{{ is_state(target_light, 'on') }}"
   is_door_open: "{{ is_state(door_sensor, 'on') }}"
-  is_showering: "{{ is_state(shower_sensor, 'on') }}"
   timer_active: "{{ is_state(input_timer, 'active') }}"
+
+  illuminance_check_enabled: >-
+    {{ illuminance_sensor is string and illuminance_sensor | trim != '' }}
+
+  illuminance_value: >-
+    {% if illuminance_check_enabled %}
+      {{ states(illuminance_sensor) | float(none) }}
+    {% else %}
+      {{ none }}
+    {% endif %}
+
+  allow_light_turn_on: >-
+    {{
+      (not illuminance_check_enabled) or
+      (illuminance_value is none) or
+      (illuminance_value < (illuminance_cutoff | float(0)))
+    }}
+
+  # --- CSV stats (no list mutations; safe in Jinja sandbox) ---
+  csv_stats: >-
+    {%- set raw = (motion_cooldowns_csv or '') -%}
+    {%- set parts = raw.split(',') -%}
+    {%- set n_vals = 0 -%}
+    {%- set last_val = 0 -%}
+    {%- for p in parts -%}
+      {%- set t = p.strip() -%}
+      {%- if t | length > 0 and (t | int(123456789) != 123456789) -%}
+        {%- set val = t | int(0) -%}
+        {%- set n_vals = n_vals + 1 -%}
+        {%- set last_val = val -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ {'n': n_vals, 'last': last_val, 'raw': (motion_cooldowns_csv or '')} }}
 
   timeout_minutes: "{{ (states(input_timeout) | float(0)) | round(0) }}"
   timeout_seconds: "{{ (timeout_minutes | int(0)) * 60 }}"
   ttl_seconds: "{{ ttl | int(0) }}"
 
 trigger:
+  # Input boolean flips
   - platform: state
     entity_id: !input input_occupancy
-    id: occupancy_detected
-    to: 'on'
+    id: occupancy_bool_on
+    to: "on"
+
   - platform: state
     entity_id: !input input_occupancy
-    id: occupancy_off
-    to: 'off'
+    id: occupancy_bool_off
+    to: "off"
 
+  # Any activity sensor goes ON
   - platform: state
-    entity_id: !input motion_sensor
-    id: motion_detected
-    to: 'on'
+    entity_id: !input activity_sensors
+    id: activity_on
+    to: "on"
 
-  - id: showering
-    platform: state
-    entity_id: !input shower_sensor
-    to: 'on'
-  - id: showering_stopped
-    platform: state
-    entity_id: !input shower_sensor
-    to: 'off'
-
+  # Door open/close
   - platform: state
     entity_id: !input door_sensor
     id: door_opened
-    to: 'on'
+    to: "on"
+
   - platform: state
     entity_id: !input door_sensor
     id: door_closed
-    to: 'off'
+    to: "off"
 
+  # Timer finished
   - platform: event
     event_type: timer.finished
     id: occupancy_timeout
     event_data:
       entity_id: !input input_timer
 
+  # Light turned off
   - platform: state
     entity_id: !input target_light
     id: light_turned_off
-    to: 'off'
+    to: "off"
 
+  # Timeout value changed (minutes)
   - platform: state
     entity_id: !input input_timeout
     id: timer_value_changed
@@ -155,307 +211,212 @@ condition: []
 
 action:
   - choose:
+      # --- Activity sensor turned ON ---
+      - conditions:
+          - condition: trigger
+            id: activity_on
+        sequence:
+          # Compute cooldown for this triggering sensor (index-based, no list mutation)
+          - variables:
+              this_sensor: "{{ trigger.entity_id }}"
+              this_index: >-
+                {%- set idx = -1 -%}
+                {%- for e in activity_sensors -%}
+                  {%- if e == trigger.entity_id -%}
+                    {%- set idx = loop.index0 -%}
+                  {%- endif -%}
+                {%- endfor -%}
+                {{ idx }}
+              current_cooldown: >-
+                {%- set n = csv_stats.n -%}
+                {%- set last = csv_stats.last -%}
+                {%- set raw = csv_stats.raw -%}
+                {%- set parts = raw.split(',') -%}
+                {%- if n == 0 -%}
+                  0
+                {%- elif n == 1 -%}
+                  {{ last }}
+                {%- else -%}
+                  {%- set target = last -%}
+                  {%- set i = 0 -%}
+                  {%- for p in parts -%}
+                    {%- set t = p.strip() -%}
+                    {%- if t | length > 0 and (t | int(123456789) != 123456789) -%}
+                      {%- if i <= this_index -%}
+                        {%- set target = t | int(0) -%}
+                      {%- endif -%}
+                      {%- set i = i + 1 -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                  {{ target }}
+                {%- endif -%}
 
-    # --- Shower started ---
-    - conditions:
-        - condition: trigger
-          id: showering
-      sequence:
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'shower started -> occupancy on, timer cancelled, light on'
-            entity_id: !input target_light
-        - service: light.turn_on
-          target:
-            entity_id: !input target_light
-        - service: input_boolean.turn_on
-          target:
-            entity_id: !input input_occupancy
-        - service: timer.cancel
-          target:
-            entity_id: !input input_timer
+          # Cancel any pending off timer; ensure light is on
+          - service: timer.cancel
+            target:
+              entity_id: !input input_timer
 
-    # --- Shower stopped ---
-    - conditions:
-        - condition: trigger
-          id: showering_stopped
-      sequence:
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'shower stopped -> start timeout'
-            entity_id: !input target_light
-        - service: timer.start
-          data:
-            duration:
-              seconds: "{{ timeout_seconds | int }}"
-          target:
-            entity_id: !input input_timer
-
-    # --- Motion detected ---
-    - conditions:
-        - condition: trigger
-          id: motion_detected
-      sequence:
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'motion detected'
-            entity_id: !input target_light
-        - service: timer.cancel
-          target:
-            entity_id: !input input_timer
-        - if:
-            - condition: state
-              entity_id: !input target_light
-              state: "off"
-          then:
-            - service: light.turn_on
-              target:
+          - if:
+              - condition: state
                 entity_id: !input target_light
-        - choose:
-            # Door closed -> immediate occupancy
-            - conditions:
-                - condition: template
-                  value_template: "{{ not (is_door_open | bool) }}"
-              sequence:
-                - service: input_boolean.turn_on
-                  target:
-                    entity_id: !input input_occupancy
-            # Door open and not showering -> let motion settle, then start timeout
-            - conditions:
-                - condition: template
-                  value_template: "{{ is_door_open and not is_showering }}"
-              sequence:
-                - wait_for_trigger:
-                    - platform: state
-                      entity_id: !input motion_sensor
-                      to: "off"
-                  timeout:
-                    seconds: "{{ motion_sensor_cooldown | int }}"
-                  continue_on_timeout: true
-                - service: logbook.log
-                  data:
-                    name: '{{ blueprint_name }}@{{ room_name }}'
-                    message: 'start timeout (door open, not showering)'
-                    entity_id: !input target_light
-                - service: timer.start
-                  data:
-                    duration:
-                      seconds: "{{ timeout_seconds | int }}"
-                  target:
-                    entity_id: !input input_timer
-
-    # --- Occupancy turned on ---
-    - conditions:
-        - condition: trigger
-          id: occupancy_detected
-      sequence:
-        - if:
-            - condition: state
-              entity_id: !input target_light
-              state: "off"
-          then:
-            - service: light.turn_on
-              target:
-                entity_id: !input target_light
-        - if:
-            - condition: template
-              value_template: "{{ timer_active }}"
-          then:
-            - service: logbook.log
-              data:
-                name: '{{ blueprint_name }}@{{ room_name }}'
-                message: 'timer cancelled (occupancy detected)'
-                entity_id: !input target_light
-            - service: timer.cancel
-              target:
-                entity_id: !input input_timer
-
-    # --- Occupancy turned off ---
-    - conditions:
-        - condition: trigger
-          id: occupancy_off
-      sequence:
-        - condition: and
-          conditions:
-            - condition: state
-              entity_id: !input target_light
-              state: "on"
-            - condition: template
-              value_template: "{{ not is_showering }}"
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'start timeout (occupancy off)'
-            entity_id: !input target_light
-        - service: timer.start
-          data:
-            duration:
-              seconds: "{{ timeout_seconds | int }}"
-          target:
-            entity_id: !input input_timer
-
-    # --- Door opened ---
-    - conditions:
-        - condition: trigger
-          id: door_opened
-      sequence:
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'door opened'
-            entity_id: !input target_light
-        - choose:
-            - conditions:
-                - condition: template
-                  value_template: "{{ is_showering }}"
-              sequence: []
-          default:
-            - service: input_boolean.turn_off
-              target:
-                entity_id: !input input_occupancy
-            - if:
-                - condition: state
+                state: "off"
+              - condition: template
+                value_template: "{{ allow_light_turn_on }}"
+            then:
+              - service: light.turn_on
+                target:
                   entity_id: !input target_light
-                  state: "off"
-              then:
-                - service: light.turn_on
-                  target:
-                    entity_id: !input target_light
 
-    # --- Door closed ---
-    - conditions:
-        - condition: trigger
-          id: door_closed
-      sequence:
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'door closed'
+          # If door is closed, this is post-close activity → mark occupied immediately
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ not is_door_open }}"
+                sequence:
+                  - service: input_boolean.turn_on
+                    target:
+                      entity_id: !input input_occupancy
+            default:
+              # Door open: wait for THIS sensor to go off (or cooldown), then start the "leaving" timeout
+              - wait_template: "{{ is_state(this_sensor, 'off') }}"
+                timeout:
+                  seconds: "{{ current_cooldown }}"
+                continue_on_timeout: true
+
+              - service: timer.start
+                data:
+                  duration:
+                    seconds: "{{ timeout_seconds | int }}"
+                target:
+                  entity_id: !input input_timer
+
+      # --- Input occupancy turned ON (manual/external) ---
+      - conditions:
+          - condition: trigger
+            id: occupancy_bool_on
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input target_light
+                state: "off"
+              - condition: template
+                value_template: "{{ allow_light_turn_on }}"
+            then:
+              - service: light.turn_on
+                target:
+                  entity_id: !input target_light
+
+          - if:
+              - condition: template
+                value_template: "{{ timer_active }}"
+            then:
+              - service: timer.cancel
+                target:
+                  entity_id: !input input_timer
+
+      # --- Input occupancy turned OFF (manual/external) ---
+      - conditions:
+          - condition: trigger
+            id: occupancy_bool_off
+        sequence:
+          - condition: state
             entity_id: !input target_light
-        - wait_for_trigger:
-            - platform: state
-              entity_id: !input motion_sensor
-              to: "off"
-          timeout:
-            seconds: "{{ motion_sensor_cooldown | int }}"
-          continue_on_timeout: true
-        - choose:
-            # If motion still on (or came back) -> occupancy on
-            - conditions:
-                - condition: state
-                  entity_id: !input motion_sensor
-                  state: "on"
-              sequence:
-                - service: logbook.log
-                  data:
-                    name: '{{ blueprint_name }}@{{ room_name }}'
-                    message: 'long-lasting motion -> occupancy on'
-                    entity_id: !input target_light
-                - service: input_boolean.turn_on
-                  target:
+            state: "on"
+
+          - service: timer.start
+            data:
+              duration:
+                seconds: "{{ timeout_seconds | int }}"
+            target:
+              entity_id: !input input_timer
+
+      # --- Door opened ---
+      - conditions:
+          - condition: trigger
+            id: door_opened
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input input_occupancy
+
+          - if:
+              - condition: state
+                entity_id: !input target_light
+                state: "off"
+              - condition: template
+                value_template: "{{ allow_light_turn_on }}"
+            then:
+              - service: light.turn_on
+                target:
+                  entity_id: !input target_light
+
+      # --- Door closed ---
+      - conditions:
+          - condition: trigger
+            id: door_closed
+        sequence:
+          # Do NOT set occupancy here. We only set it on post-close activity.
+          # Simply start the TTL; any subsequent activity_on will cancel & mark occupied.
+          - service: timer.start
+            data:
+              duration:
+                seconds: "{{ ttl_seconds | int }}"
+            target:
+              entity_id: !input input_timer
+
+      # --- Timer finished ---
+      - conditions:
+          - condition: trigger
+            id: occupancy_timeout
+        sequence:
+          - choose:
+              # Only extend the timer if we know we're occupied (post-close activity happened)
+              - conditions:
+                  - condition: state
                     entity_id: !input input_occupancy
-          default:
-            - condition: template
-              value_template: "{{ not is_showering }}"
-            - service: logbook.log
-              data:
-                name: '{{ blueprint_name }}@{{ room_name }}'
-                message: 'start TTL (door closed, motion off, shower off)'
-                entity_id: !input target_light
-            - service: timer.start
-              data:
-                duration:
-                  seconds: "{{ ttl_seconds | int }}"
-              target:
-                entity_id: !input input_timer
+                    state: "on"
+                  - condition: template
+                    value_template: "{{ is_light_on }}"
+                sequence:
+                  - service: timer.start
+                    data:
+                      duration:
+                        seconds: "{{ timeout_seconds | int }}"
+                    target:
+                      entity_id: !input input_timer
+            default:
+              - service: light.turn_off
+                target:
+                  entity_id: !input target_light
 
-    # --- Timer finished ---
-    - conditions:
-        - condition: trigger
-          id: occupancy_timeout
-      sequence:
-        - choose:
-            - conditions:
-                - condition: template
-                  value_template: "{{ is_showering }}"
-              sequence:
-                - service: logbook.log
-                  data:
-                    name: '{{ blueprint_name }}@{{ room_name }}'
-                    message: 'timer finished but showering -> extend'
-                    entity_id: !input target_light
-                - service: timer.start
-                  data:
-                    duration:
-                      seconds: "{{ timeout_seconds | int }}"
-                  target:
-                    entity_id: !input input_timer
-            - conditions:
-                - condition: state
-                  entity_id: !input motion_sensor
-                  state: "on"
-                - condition: template
-                  value_template: "{{ is_light_on and not is_showering }}"
-              sequence:
-                - service: logbook.log
-                  data:
-                    name: '{{ blueprint_name }}@{{ room_name }}'
-                    message: 'timer finished, motion on -> extend'
-                    entity_id: !input target_light
-                - service: timer.start
-                  data:
-                    duration:
-                      seconds: "{{ timeout_seconds | int }}"
-                  target:
-                    entity_id: !input input_timer
-          default:
-            - service: logbook.log
-              data:
-                name: '{{ blueprint_name }}@{{ room_name }}'
-                message: >-
-                  timed out, lights off!
-                  (on time: {{
-                    'n/a' if states(target_light) in ['unknown','unavailable']
-                    else relative_time(states[target_light].last_changed)
-                  }})
-                entity_id: !input target_light
-            - service: light.turn_off
-              target:
-                entity_id: !input target_light
-            - service: input_boolean.turn_off
-              target:
-                entity_id: !input input_occupancy
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: !input input_occupancy
 
-    # --- Light turned off ---
-    - conditions:
-        - condition: trigger
-          id: light_turned_off
-      sequence:
-        - service: timer.cancel
-          target:
-            entity_id: !input input_timer
-        - service: input_boolean.turn_off
-          target:
-            entity_id: !input input_occupancy
+      # --- Light turned off ---
+      - conditions:
+          - condition: trigger
+            id: light_turned_off
+        sequence:
+          - service: timer.cancel
+            target:
+              entity_id: !input input_timer
 
-    # --- Timeout value changed (minutes) ---
-    - conditions:
-        - condition: trigger
-          id: timer_value_changed
-      sequence:
-        - condition: template
-          value_template: "{{ timer_active }}"
-        - service: logbook.log
-          data:
-            name: '{{ blueprint_name }}@{{ room_name }}'
-            message: 'input_timeout changed -> restarting timer with new value'
-            entity_id: !input target_light
-        - service: timer.start
-          data:
-            duration:
-              seconds: "{{ timeout_seconds | int }}"
-          target:
-            entity_id: !input input_timer
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input input_occupancy
+
+      # --- Timeout value changed (minutes) ---
+      - conditions:
+          - condition: trigger
+            id: timer_value_changed
+        sequence:
+          - condition: template
+            value_template: "{{ timer_active }}"
+
+          - service: timer.start
+            data:
+              duration:
+                seconds: "{{ timeout_seconds | int }}"
+            target:
+              entity_id: !input input_timer
