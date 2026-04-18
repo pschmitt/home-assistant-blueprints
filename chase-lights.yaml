@@ -1,0 +1,117 @@
+blueprint:
+  name: "⏳ Chase down lights that were left on and there's no motion"
+  description: Turn off lights that have been on for a while and there was no motion for an extended period of time
+  domain: automation
+  input:
+    target_entity:
+      name: "💡 Target entity (light, switch...)"
+      selector:
+        entity: {}
+    motion_sensor:
+      name: "🏃 Motion Sensor"
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class:
+            - motion
+            - occupancy
+    override_sensor:
+      name: "☝️ Override sensor (optional)"
+      selector:
+        entity:
+          domain: binary_sensor
+      default:
+    target_entity_on_time:
+      name: '⏳ Threshold "on" time of the target entity'
+      default: 60
+      selector:
+        number:
+          mode: box
+          min: 1
+          max: 86400
+          unit_of_measurement: minutes
+    no_motion_timeout:
+      name: "⏰ Motion detection threshold"
+      default: 30
+      selector:
+        number:
+          mode: box
+          min: 1
+          max: 86400
+          unit_of_measurement: minutes
+    # check_period:
+    #   name: "How often to check the light/motion sensor states"
+    #   default: 30
+    #   selector:
+    #     number:
+    #       mode: box
+    #       min: 1
+    #       max: 120
+    #       unit_of_measurement: minutes
+
+mode: restart
+
+variables:
+  blueprint_name: "chase-down-lights"
+  target_entity: !input target_entity
+  override_sensor: !input override_sensor
+  no_motion_timeout: !input no_motion_timeout
+  target_entity_on_time: !input target_entity_on_time
+  # check_period: !input check_period
+
+trigger:
+  - platform: time_pattern
+    # FIXME Below does not work since we cannot template here
+    # minutes: '/{{ check_period | default("30") }}'
+    minutes: '/30'
+
+condition:
+  - condition: and
+    conditions:
+      - condition: state
+        entity_id: !input target_entity
+        state: 'on'
+        for:
+          minutes: !input target_entity_on_time
+      - condition: state
+        entity_id: !input motion_sensor
+        state: 'off'
+        for:
+          minutes: !input no_motion_timeout
+      - condition: template
+        value_template: >-
+          {% if override_sensor is not defined or override_sensor in [none, ""] %}
+          true
+          {% else %}
+          {{ is_state(override_sensor, "off") }}
+          {% endif %}
+
+
+action:
+  - alias: "{{ blueprint_name }}: Capture runtime before turning off"
+    variables:
+      runtime_seconds: >-
+        {{
+          (
+            as_timestamp(now()) -
+            as_timestamp(states[target_entity].last_changed)
+          ) | int(0)
+        }}
+      runtime_hours: "{{ (runtime_seconds // 3600) | int }}"
+      runtime_minutes: "{{ ((runtime_seconds % 3600) // 60) | int }}"
+      runtime_remaining_seconds: "{{ (runtime_seconds % 60) | int }}"
+  - alias: "{{ blueprint_name }}: No motion detected"
+    service: homeassistant.turn_off
+    entity_id: !input target_entity
+  - service: notify.mobile_app_zenfone_10
+    data:
+      message: >-
+        Turning off {{ state_attr(target_entity, "friendly_name") }} since
+        it was on for
+        {{ "%02d:%02d:%02d" | format(runtime_hours, runtime_minutes, runtime_remaining_seconds) }}
+        and
+        there was no motion in the last {{ no_motion_timeout }} minutes.
+      data:
+        tag: '{{ target_entity }}-timed-out'
+        notification_icon: mdi:lightbulb-off
+        timeout: 299

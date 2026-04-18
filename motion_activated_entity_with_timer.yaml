@@ -1,0 +1,287 @@
+blueprint:
+  name: 🚶 Motion-activated entities (with timer)
+  description: Turn things on with motion and optionally a door sensor, then off via timer.
+  domain: automation
+
+  input:
+    motion_sensor:
+      name: 🚶 Motion Sensor
+      description: Triggers turning on the target entity.
+      selector:
+        entity:
+          domain: binary_sensor
+
+    door_sensor:
+      name: 🚪 Door Sensor (optional)
+      description: Also trigger when the door opens.
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+
+    target_entity:
+      name: 💡 Target entity
+      description: Light, switch, scene, etc. to control.
+      selector:
+        entity: {}
+
+    target_off_entity:
+      name: 🔌 Custom OFF entity (optional)
+      description: Turn this entity off instead of the target entity.
+      default: ""
+      selector:
+        entity: {}
+
+    target_on_action:
+      name: ▶️ Custom ON action (optional)
+      description: Run this action instead of the default turn_on.
+      default: []
+      selector:
+        action: {}
+
+    target_off_action:
+      name: ⏹ Custom OFF action (optional)
+      description: Run this action instead of the default turn_off.
+      default: []
+      selector:
+        action: {}
+
+    timer_entity:
+      name: ⏱ Timer
+      description: Timer used to turn things off.
+      selector:
+        entity:
+          domain: timer
+
+    no_motion_wait:
+      name: ⌛ Delay after motion (seconds)
+      description: Time to keep the target on after motion stops.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 3600
+          step: 1
+          unit_of_measurement: seconds
+          mode: slider
+
+    illuminance_sensor:
+      name: 🌞 Illuminance sensor (optional)
+      description: Used to decide whether it is dark enough.
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    illuminance_cutoff:
+      name: 🌙 Illuminance threshold
+      description: Automation only turns on below this lux value.
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 1
+          unit_of_measurement: lx
+          mode: slider
+
+    blocker_entity:
+      name: 🚫 Blocker entity (optional)
+      description: If this entity is on, the automation will not turn on the target.
+      default: ""
+      selector:
+        entity: {}
+
+    turn_off_blocker_entity:
+      name: 🛑 Turn-off blocker (optional)
+      description: If this entity is on, the automation will not turn off the target.
+      default: ""
+      selector:
+        entity: {}
+
+    time_limit_after:
+      name: 🌅 Only after (optional)
+      description: Only run after this time.
+      default: ""
+      selector:
+        time: {}
+
+    time_limit_before:
+      name: 🌃 Only before (optional)
+      description: Only run before this time.
+      default: ""
+      selector:
+        time: {}
+
+mode: restart
+max_exceeded: silent
+
+trigger_variables:
+  tv_door_sensor: !input door_sensor
+  tv_turn_off_blocker_entity: !input turn_off_blocker_entity
+
+variables:
+  motion_sensor: !input motion_sensor
+  door_sensor: !input door_sensor
+  target_entity: !input target_entity
+  timer_entity: !input timer_entity
+  illuminance_sensor: !input illuminance_sensor
+  illuminance_cutoff: !input illuminance_cutoff
+  blocker_entity: !input blocker_entity
+  turn_off_blocker_entity: !input turn_off_blocker_entity
+  time_limit_before: !input time_limit_before
+  time_limit_after: !input time_limit_after
+  no_motion_wait: !input no_motion_wait
+  target_off_entity: !input target_off_entity
+  target_on_action: !input target_on_action
+  target_off_action: !input target_off_action
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "on"
+    id: motion
+
+  - platform: template
+    id: door
+    value_template: >
+      {{ tv_door_sensor != '' and is_state(tv_door_sensor, 'on') }}
+
+  - platform: event
+    event_type: timer.finished
+    id: timer_done
+    event_data:
+      entity_id: !input timer_entity
+
+  - platform: state
+    entity_id: !input target_entity
+    to: "off"
+    id: turned_off
+
+  - platform: template
+    id: blocker_cleared
+    value_template: >
+      {{ tv_turn_off_blocker_entity != '' and is_state(tv_turn_off_blocker_entity, 'off') }}
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - motion
+              - door
+          - condition: template
+            value_template: >
+              {{
+                states(target_entity) == 'on'
+                or not illuminance_sensor
+                or (states(illuminance_sensor) | float(0)) < (illuminance_cutoff | float(0))
+              }}
+          - condition: template
+            value_template: >
+              {{ not blocker_entity or is_state(blocker_entity, 'off') }}
+          - condition: template
+            value_template: >
+              {% set current_time = now().strftime('%H:%M:%S') %}
+
+              {% if time_limit_before and not time_limit_after %}
+                {{ current_time < time_limit_before }}
+              {% elif time_limit_after and not time_limit_before %}
+                {{ current_time > time_limit_after }}
+              {% elif time_limit_before and time_limit_after %}
+                {% set wraps_midnight = time_limit_after > time_limit_before %}
+                {% if not wraps_midnight %}
+                  {{ current_time > time_limit_after and current_time < time_limit_before }}
+                {% else %}
+                  {{ current_time < time_limit_before or current_time > time_limit_after }}
+                {% endif %}
+              {% else %}
+                true
+              {% endif %}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ target_on_action | length > 0 }}"
+                sequence: !input target_on_action
+            default:
+              - service: homeassistant.turn_on
+                data:
+                  entity_id: "{{ target_entity }}"
+
+          - service: timer.cancel
+            target:
+              entity_id: !input timer_entity
+
+          - if:
+              - condition: trigger
+                id: motion
+            then:
+              - wait_for_trigger:
+                  - platform: state
+                    entity_id: !input motion_sensor
+                    to: "off"
+
+          - if:
+              - condition: template
+                value_template: "{{ no_motion_wait | int > 0 }}"
+              - condition: template
+                value_template: >
+                  {{ not turn_off_blocker_entity or is_state(turn_off_blocker_entity, 'off') }}
+            then:
+              - service: timer.start
+                target:
+                  entity_id: !input timer_entity
+                data:
+                  duration: "{{ no_motion_wait | int }}"
+
+      - conditions:
+          - condition: trigger
+            id: timer_done
+          - condition: template
+            value_template: >
+              {{ not turn_off_blocker_entity or is_state(turn_off_blocker_entity, 'off') }}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ target_off_entity != '' }}"
+                sequence:
+                  - service: homeassistant.turn_off
+                    data:
+                      entity_id: "{{ target_off_entity }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ target_off_action | length > 0 }}"
+                sequence: !input target_off_action
+            default:
+              - service: homeassistant.turn_off
+                data:
+                  entity_id: "{{ target_entity }}"
+
+      - conditions:
+          - condition: trigger
+            id: turned_off
+        sequence:
+          - service: timer.cancel
+            target:
+              entity_id: !input timer_entity
+
+      - conditions:
+          - condition: trigger
+            id: blocker_cleared
+          - condition: template
+            value_template: "{{ states(target_entity) == 'on' }}"
+          - condition: template
+            value_template: "{{ no_motion_wait | int > 0 }}"
+          - condition: template
+            value_template: "{{ states(timer_entity) != 'active' }}"
+        sequence:
+          - service: timer.start
+            target:
+              entity_id: !input timer_entity
+            data:
+              duration: "{{ no_motion_wait | int }}"

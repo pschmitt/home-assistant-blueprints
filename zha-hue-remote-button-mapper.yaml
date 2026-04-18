@@ -1,0 +1,493 @@
+blueprint:
+  name: Hue Remote Mapper (ZHA Integration)
+  description: 'A remote control mapper for the Philips Hue Remotes (RWL020, RWL021,
+    and RWL022).
+
+    '
+  domain: automation
+  source_url: https://gist.github.com/pschmitt/3ce125a0e6d806da7bdec75e7203d4da
+  author: Manix84
+  input:
+    dimmer_device_id:
+      name: Dimmer Remote Device
+      description: Your Hue dimmer remote (e.g. RWL020, RWL021, RWL022); check Hue
+        integration and/or Hue app if you don't know the name
+      selector:
+        device:
+          filter:
+          - integration: zha
+            manufacturer: Philips
+            model: RWL020
+          - integration: zha
+            manufacturer: Philips
+            model: RWL021
+          - integration: zha
+            manufacturer: Signify Netherlands B.V.
+            model: RWL022
+          multiple: false
+    button1_actions:
+      name: On Button
+      icon: mdi:numeric-1-box-outline
+      collapsed: true
+      input:
+        btn_on_single_press_action:
+          name: Single Press Actions
+          description: <ha-icon icon="mdi:numeric-1-box"></ha-icon> Actions to run,
+            when button is pressed quickly.
+          default: []
+          selector:
+            action: {}
+        btn_on_double_press_action:
+          name: Double (2) Press Actions
+          description: <ha-icon icon="mdi:numeric-2-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly twice.
+          default: []
+          selector:
+            action: {}
+        btn_on_triple_press_action:
+          name: Triple (3) Press Actions
+          description: <ha-icon icon="mdi:numeric-3-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly three times.
+          default: []
+          selector:
+            action: {}
+        btn_on_quadruple_press_action:
+          name: Quadruple (4) Press Actions
+          description: <ha-icon icon="mdi:numeric-4-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly four times.
+          default: []
+          selector:
+            action: {}
+        btn_on_quintuple_press_action:
+          name: Quintuple (5) Press Actions
+          description: <ha-icon icon="mdi:numeric-5-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly five times.
+          default: []
+          selector:
+            action: {}
+        btn_on_long_press_action:
+          name: Long Press Actions
+          description: <ha-icon icon="mdi:checkbox-multiple-blank"></ha-icon> Actions
+            to run, when button is pressed and released after over a second.
+          default: []
+          selector:
+            action: {}
+    button2_actions:
+      name: Dim Up Button
+      icon: mdi:chevron-up-box-outline
+      collapsed: true
+      input:
+        btn_up_single_press_action:
+          name: Single Press Actions
+          description: <ha-icon icon="mdi:numeric-1-box"></ha-icon> Actions to run,
+            when button is pressed quickly.
+          default: []
+          selector:
+            action: {}
+        btn_up_double_press_action:
+          name: Double (2) Press Actions
+          description: <ha-icon icon="mdi:numeric-2-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly twice.
+          default: []
+          selector:
+            action: {}
+        btn_up_triple_press_action:
+          name: Triple (3) Press Actions
+          description: <ha-icon icon="mdi:numeric-3-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly three times.
+          default: []
+          selector:
+            action: {}
+        btn_up_quadruple_press_action:
+          name: Quadruple (4) Press Actions
+          description: <ha-icon icon="mdi:numeric-4-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly four times.
+          default: []
+          selector:
+            action: {}
+        btn_up_quintuple_press_action:
+          name: Quintuple (5) Press Actions
+          description: <ha-icon icon="mdi:numeric-5-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly five times.
+          default: []
+          selector:
+            action: {}
+        btn_up_long_press_action:
+          name: Long Press Actions
+          description: <ha-icon icon="mdi:checkbox-multiple-blank"></ha-icon> Actions
+            to run, when button is pressed and released after over a second.
+          default: []
+          selector:
+            action: {}
+    button3_actions:
+      name: Dim Down Button
+      icon: mdi:chevron-down-box-outline
+      collapsed: true
+      input:
+        btn_down_single_press_action:
+          name: Single Press Actions
+          description: <ha-icon icon="mdi:numeric-1-box"></ha-icon> Actions to run,
+            when button is pressed quickly.
+          default: []
+          selector:
+            action: {}
+        btn_down_double_press_action:
+          name: Double (2) Press Actions
+          description: <ha-icon icon="mdi:numeric-2-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly twice.
+          default: []
+          selector:
+            action: {}
+        btn_down_triple_press_action:
+          name: Triple (3) Press Actions
+          description: <ha-icon icon="mdi:numeric-3-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly three times.
+          default: []
+          selector:
+            action: {}
+        btn_down_quadruple_press_action:
+          name: Quadruple (4) Press Actions
+          description: <ha-icon icon="mdi:numeric-4-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly four times.
+          default: []
+          selector:
+            action: {}
+        btn_down_quintuple_press_action:
+          name: Quintuple (5) Press Actions
+          description: <ha-icon icon="mdi:numeric-5-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly five times.
+          default: []
+          selector:
+            action: {}
+        btn_down_long_press_action:
+          name: Long Press Actions
+          description: <ha-icon icon="mdi:checkbox-multiple-blank"></ha-icon> Actions
+            to run, when button is pressed and released after over a second.
+          default: []
+          selector:
+            action: {}
+    button4_actions:
+      name: Off Button
+      icon: mdi:numeric-0-box-outline
+      collapsed: true
+      input:
+        btn_off_single_press_action:
+          name: Single Press Actions
+          description: <ha-icon icon="mdi:numeric-1-box"></ha-icon> Actions to run,
+            when button is pressed quickly.
+          default: []
+          selector:
+            action: {}
+        btn_off_double_press_action:
+          name: Double (2) Press Actions
+          description: <ha-icon icon="mdi:numeric-2-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly twice.
+          default: []
+          selector:
+            action: {}
+        btn_off_triple_press_action:
+          name: Triple (3) Press Actions
+          description: <ha-icon icon="mdi:numeric-3-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly three times.
+          default: []
+          selector:
+            action: {}
+        btn_off_quadruple_press_action:
+          name: Quadruple (4) Press Actions
+          description: <ha-icon icon="mdi:numeric-4-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly four times.
+          default: []
+          selector:
+            action: {}
+        btn_off_quintuple_press_action:
+          name: Quintuple (5) Press Actions
+          description: <ha-icon icon="mdi:numeric-5-box-multiple"></ha-icon> Actions
+            to run, when button is pressed quickly five times.
+          default: []
+          selector:
+            action: {}
+        btn_off_long_press_action:
+          name: Long Press Actions
+          description: <ha-icon icon="mdi:checkbox-multiple-blank"></ha-icon> Actions
+            to run, when button is pressed and released after over a second.
+          default: []
+          selector:
+            action: {}
+description: ''
+trigger:
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: on_press
+  id: btn_on_single_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: on_double_press
+  id: btn_on_double_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: on_triple_press
+  id: btn_on_triple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: on_quadruple_press
+  id: btn_on_quadruple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: on_quintuple_press
+  id: btn_on_quintuple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: on_long_release
+  id: btn_on_long_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: up_press
+  id: btn_up_single_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: up_double_press
+  id: btn_up_double_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: up_triple_press
+  id: btn_up_triple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: up_quadruple_press
+  id: btn_up_quadruple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: up_quintuple_press
+  id: btn_up_quintuple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: up_long_release
+  id: btn_up_long_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: down_press
+  id: btn_down_single_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: down_double_press
+  id: btn_down_double_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: down_triple_press
+  id: btn_down_triple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: down_quadruple_press
+  id: btn_down_quadruple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: down_quintuple_press
+  id: btn_down_quintuple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: down_long_release
+  id: btn_down_long_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: off_press
+  id: btn_off_single_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: off_double_press
+  id: btn_off_double_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: off_triple_press
+  id: btn_off_triple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: off_quadruple_press
+  id: btn_off_quadruple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: off_quintuple_press
+  id: btn_off_quintuple_press
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input dimmer_device_id
+    command: off_long_release
+  id: btn_off_long_press
+condition: []
+action:
+- choose:
+  - alias: On Button - Single Press
+    conditions:
+    - condition: trigger
+      id: btn_on_single_press
+    sequence: !input btn_on_single_press_action
+  - alias: On Button - Double Press
+    conditions:
+    - condition: trigger
+      id: btn_on_double_press
+    sequence: !input btn_on_double_press_action
+  - alias: On Button - Triple Press
+    conditions:
+    - condition: trigger
+      id: btn_on_triple_press
+    sequence: !input btn_on_triple_press_action
+  - alias: On Button - Quadruple Press
+    conditions:
+    - condition: trigger
+      id: btn_on_quadruple_press
+    sequence: !input btn_on_quadruple_press_action
+  - alias: On Button - Quintuple Press
+    conditions:
+    - condition: trigger
+      id: btn_on_quintuple_press
+    sequence: !input btn_on_quintuple_press_action
+  - alias: On Button - Long Press
+    conditions:
+    - condition: trigger
+      id: btn_on_long_press
+    sequence: !input btn_on_long_press_action
+  - alias: Dim Up Button - Single Press
+    conditions:
+    - condition: trigger
+      id: btn_up_single_press
+    sequence: !input btn_up_single_press_action
+  - alias: Dim Up Button - Double Press
+    conditions:
+    - condition: trigger
+      id: btn_up_double_press
+    sequence: !input btn_up_double_press_action
+  - alias: Dim Up Button - Triple Press
+    conditions:
+    - condition: trigger
+      id: btn_up_triple_press
+    sequence: !input btn_up_triple_press_action
+  - alias: Dim Up Button - Quadruple Press
+    conditions:
+    - condition: trigger
+      id: btn_up_quadruple_press
+    sequence: !input btn_up_quadruple_press_action
+  - alias: Dim Up Button - Quintuple Press
+    conditions:
+    - condition: trigger
+      id: btn_up_quintuple_press
+    sequence: !input btn_up_quintuple_press_action
+  - alias: Dim Up Button - Long Press
+    conditions:
+    - condition: trigger
+      id: btn_up_long_press
+    sequence: !input btn_up_long_press_action
+  - alias: Dim Down Button - Single Press
+    conditions:
+    - condition: trigger
+      id: btn_down_single_press
+    sequence: !input btn_down_single_press_action
+  - alias: Dim Down Button - Double Press
+    conditions:
+    - condition: trigger
+      id: btn_down_double_press
+    sequence: !input btn_down_double_press_action
+  - alias: Dim Down Button - Triple Press
+    conditions:
+    - condition: trigger
+      id: btn_down_triple_press
+    sequence: !input btn_down_triple_press_action
+  - alias: Dim Down Button - Quadruple Press
+    conditions:
+    - condition: trigger
+      id: btn_down_quadruple_press
+    sequence: !input btn_down_quadruple_press_action
+  - alias: Dim Down Button - Quintuple Press
+    conditions:
+    - condition: trigger
+      id: btn_down_quintuple_press
+    sequence: !input btn_down_quintuple_press_action
+  - alias: Dim Down Button - Long Press
+    conditions:
+    - condition: trigger
+      id: btn_down_long_press
+    sequence: !input btn_down_long_press_action
+  - alias: Off Button - Single Press
+    conditions:
+    - condition: trigger
+      id: btn_off_single_press
+    sequence: !input btn_off_single_press_action
+  - alias: Off Button - Double Press
+    conditions:
+    - condition: trigger
+      id: btn_off_double_press
+    sequence: !input btn_off_double_press_action
+  - alias: Off Button - Triple Press
+    conditions:
+    - condition: trigger
+      id: btn_off_triple_press
+    sequence: !input btn_off_triple_press_action
+  - alias: Off Button - Quadruple Press
+    conditions:
+    - condition: trigger
+      id: btn_off_quadruple_press
+    sequence: !input btn_off_quadruple_press_action
+  - alias: Off Button - Quintuple Press
+    conditions:
+    - condition: trigger
+      id: btn_off_quintuple_press
+    sequence: !input btn_off_quintuple_press_action
+  - alias: Off Button - Long Press
+    conditions:
+    - condition: trigger
+      id: btn_off_long_press
+    sequence: !input btn_off_long_press_action
+  default:
+  - service: persistent_notification.create
+    data:
+      message: 'Hue dimmer ran default event from "choose" action on button press!
+        Please check any automations which may not be handling this event: {{ trigger.id
+        }}'
+      notification_id: hue-remote-lights
+      title: Uncaught Dimmer Command ({{ trigger.id }})
+mode: single

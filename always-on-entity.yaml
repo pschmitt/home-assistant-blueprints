@@ -1,0 +1,67 @@
+blueprint:
+  name: "🔛 Always-on entity"
+  description: Keep the selected switch on, even when it is turned off. This should
+    be used for switches you never want to be turned off.
+  domain: automation
+  input:
+    target_entity:
+      name: Target Entity
+      description: The entity that will always be kept on.
+      selector:
+        entity:
+          # domain: switch
+    wait_period:
+      name: How long to leave the target entity off before turning it back on.
+      description: Time in seconds to leave the target entity off
+      default: 0
+      selector:
+        number:
+          mode: box
+          unit_of_measurement: seconds
+          min: 0
+          max: 3600
+          step: 1
+    # check_period:
+    #   name: "How often to check the entity state (cron)"
+    #   default: 30
+    #   selector:
+    #     number:
+    #       mode: box
+    #       min: 1
+    #       max: 120
+    #       unit_of_measurement: minutes
+
+mode: single
+max_exceeded: silent
+
+trigger:
+- platform: homeassistant
+  event: start
+  id: hass_start
+- platform: time_pattern
+  # FIXME
+  # minutes: '/{{ check_period | default("30") }}'
+  minutes: '/30'
+  id: cron
+- platform: state
+  entity_id: !input 'target_entity'
+  to: 'off'
+  id: entity_off
+action:
+  choose:
+  - conditions:
+    - or:
+      - condition: trigger
+        id: hass_start
+      - condition: trigger
+        id: cron
+    sequence:
+      - service: homeassistant.turn_on
+        entity_id: !input 'target_entity'
+  - conditions:
+    - condition: trigger
+      id: entity_off
+    sequence:
+      - delay: !input 'wait_period'
+      - service: homeassistant.turn_on
+        entity_id: !input 'target_entity'

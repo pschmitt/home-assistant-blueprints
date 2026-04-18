@@ -1,0 +1,207 @@
+blueprint:
+  name: Simple Motion Light With Timer
+  description: Motion-controlled light with lux gating, a time window, fixed day/night brightness, and a UI timer.
+  domain: automation
+  input:
+    motion_sensors:
+      name: 👀 Motion sensors
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    light_entity:
+      name: 💡 Light
+      selector:
+        entity:
+          domain: light
+    timer_entity:
+      name: ⏲️ Timer
+      selector:
+        entity:
+          domain: timer
+    lux_sensor:
+      name: 🔆 Lux sensor
+      selector:
+        entity:
+          domain: sensor
+    max_lux:
+      name: 🔢 Maximum lux
+      default: 300
+      selector:
+        number:
+          min: 0.0
+          max: 2000.0
+          unit_of_measurement: lx
+          step: 1.0
+          mode: slider
+    after_time:
+      name: 🌅 Active after
+      default: "06:00:00"
+      selector:
+        time: {}
+    before_time:
+      name: 🌇 Active before
+      default: "23:00:00"
+      selector:
+        time: {}
+    off_delay_minutes:
+      name: ⏳ Off delay
+      default: 5
+      selector:
+        number:
+          min: 0.0
+          max: 60.0
+          unit_of_measurement: minutes
+          step: 1.0
+          mode: slider
+    night_start:
+      name: 🌙 Night starts at
+      default: "16:00:00"
+      selector:
+        time: {}
+    night_end:
+      name: 🌞 Night ends at
+      default: "03:00:00"
+      selector:
+        time: {}
+    day_brightness:
+      name: ☀️ Day brightness
+      default: 85
+      selector:
+        number:
+          min: 1.0
+          max: 100.0
+          unit_of_measurement: "%"
+          step: 1.0
+          mode: slider
+    night_brightness:
+      name: 🌜 Night brightness
+      default: 33
+      selector:
+        number:
+          min: 1.0
+          max: 100.0
+          unit_of_measurement: "%"
+          step: 1.0
+          mode: slider
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  motion_sensors: !input motion_sensors
+  light_entity: !input light_entity
+  timer_entity: !input timer_entity
+  lux_sensor: !input lux_sensor
+  max_lux: !input max_lux
+  off_delay_minutes: !input off_delay_minutes
+  after_time: !input after_time
+  before_time: !input before_time
+  night_start: !input night_start
+  night_end: !input night_end
+  day_brightness: !input day_brightness
+  night_brightness: !input night_brightness
+  brightness_pct: >-
+    {% set now_time = now().strftime('%H:%M:%S') %}
+    {% if night_start <= night_end %}
+      {% set is_night = night_start <= now_time < night_end %}
+    {% else %}
+      {% set is_night = now_time >= night_start or now_time < night_end %}
+    {% endif %}
+    {% if is_night %}
+      {{ night_brightness | int }}
+    {% else %}
+      {{ day_brightness | int }}
+    {% endif %}
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensors
+    to: "on"
+    id: motion-on
+
+  - platform: state
+    entity_id: !input motion_sensors
+    to: "off"
+    id: motion-off
+
+  - platform: event
+    event_type: timer.finished
+    id: timer-finished
+    event_data:
+      entity_id: !input timer_entity
+
+  - platform: state
+    entity_id: !input light_entity
+    to: "off"
+    id: light-off
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: motion-on
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ states(light_entity) == 'on' }}"
+                sequence:
+                  - action: timer.start
+                    target:
+                      entity_id: !input timer_entity
+                    data:
+                      duration:
+                        minutes: !input off_delay_minutes
+            default:
+              - condition: time
+                after: !input after_time
+                before: !input before_time
+              - condition: template
+                value_template: "{{ states(lux_sensor) | float(99999) < (max_lux | float) }}"
+              - action: light.turn_on
+                target:
+                  entity_id: !input light_entity
+                data:
+                  brightness_pct: "{{ brightness_pct }}"
+              - action: timer.start
+                target:
+                  entity_id: !input timer_entity
+                data:
+                  duration:
+                    minutes: !input off_delay_minutes
+
+      - conditions:
+          - condition: trigger
+            id: motion-off
+          - condition: template
+            value_template: "{{ expand(motion_sensors) | selectattr('state', 'eq', 'on') | list | count == 0 }}"
+          - condition: template
+            value_template: "{{ states(light_entity) == 'on' }}"
+        sequence:
+          - action: timer.start
+            target:
+              entity_id: !input timer_entity
+            data:
+              duration:
+                minutes: !input off_delay_minutes
+
+      - conditions:
+          - condition: trigger
+            id: timer-finished
+          - condition: template
+            value_template: "{{ expand(motion_sensors) | selectattr('state', 'eq', 'on') | list | count == 0 }}"
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input light_entity
+
+      - conditions:
+          - condition: trigger
+            id: light-off
+        sequence:
+          - action: timer.cancel
+            target:
+              entity_id: !input timer_entity
