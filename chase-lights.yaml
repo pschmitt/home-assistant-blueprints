@@ -100,6 +100,15 @@ action:
       runtime_hours: "{{ (runtime_seconds // 3600) | int }}"
       runtime_minutes: "{{ ((runtime_seconds % 3600) // 60) | int }}"
       runtime_remaining_seconds: "{{ (runtime_seconds % 60) | int }}"
+      runtime_human: >-
+        {% if runtime_hours > 0 %}
+        {{ runtime_hours }}hr{% if runtime_hours != 1 %}s{% endif %}
+        {% if runtime_minutes > 0 %} {{ runtime_minutes }}min{% endif %}
+        {% elif runtime_minutes > 0 %}
+        {{ runtime_minutes }}min
+        {% else %}
+        {{ runtime_remaining_seconds }}s
+        {% endif %}
   - alias: "{{ blueprint_name }}: No motion detected"
     service: homeassistant.turn_off
     entity_id: !input target_entity
@@ -108,7 +117,7 @@ action:
       message: >-
         Turning off {{ state_attr(target_entity, "friendly_name") }} since
         it was on for
-        {{ "%02d:%02d:%02d" | format(runtime_hours, runtime_minutes, runtime_remaining_seconds) }}
+        {{ runtime_human | trim }}
         and
         there was no motion in the last {{ no_motion_timeout }} minutes.
       data:
