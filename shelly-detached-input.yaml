@@ -5,56 +5,81 @@ blueprint:
     Shelly binary sensor that represents the wall-switch input and this
     blueprint will react to its state changes. By default it can toggle a
     selected smart light while making sure the Shelly relay is on first, and
-    you can optionally override that behavior with a custom action sequence.
+    you can optionally override the toggle step with a custom action sequence.
   domain: automation
   author: pschmitt
   input:
-    shelly_input:
-      name: "🔌 Shelly detached input sensor"
+    required_entities:
+      name: "Required Entities"
+      icon: mdi:light-switch
       description: >-
-        Select the Shelly binary sensor for the physical switch input, for
-        example `binary_sensor.kitchen_lights_left_switch`. Shelly exposes
-        these inputs as `power` binary sensors, so the selector is filtered to
-        Shelly `binary_sensor` entities with device class `power`.
-      selector:
-        entity:
-          filter:
-            - integration: shelly
-              domain: binary_sensor
-              device_class: power
-    shelly_relay:
-      name: "🔁 Shelly relay"
-      description: The Shelly switch entity that powers the smart light circuit.
-      selector:
-        entity:
-          filter:
-            - integration: shelly
-              domain: switch
-    target_light:
-      name: "💡 Target smart light"
-      description: The light entity to toggle when the detached input changes state.
-      selector:
-        entity:
-          domain: light
-    brightness_pct:
-      name: "🔆 Toggle brightness"
-      description: Brightness percentage to apply when toggling the smart light.
-      default: 85
-      selector:
-        number:
-          min: 1.0
-          max: 100.0
-          unit_of_measurement: "%"
-          step: 1.0
-          mode: slider
-    custom_action:
-      name: "⚙️ Custom action override"
+        Select the Shelly input, the Shelly relay, and the smart light this
+        blueprint should control.
+      input:
+        shelly_input:
+          name: "🔌 Shelly detached input sensor"
+          description: >-
+            Select the Shelly binary sensor for the physical switch input, for
+            example `binary_sensor.kitchen_lights_left_switch`. Shelly exposes
+            these inputs as `power` binary sensors, so the selector is filtered to
+            Shelly `binary_sensor` entities with device class `power`.
+          selector:
+            entity:
+              filter:
+                - integration: shelly
+                  domain: binary_sensor
+                  device_class: power
+        shelly_relay:
+          name: "🔁 Shelly relay"
+          description: The Shelly switch entity that powers the smart light circuit.
+          selector:
+            entity:
+              filter:
+                - integration: shelly
+                  domain: switch
+        target_light:
+          name: "💡 Target smart light"
+          description: The light entity to toggle when the detached input changes state.
+          selector:
+            entity:
+              domain: light
+    optional_behavior:
+      name: "Optional Behavior"
+      icon: mdi:tune-variant
       description: >-
-        Optional custom action sequence. If set, it overrides the default
-        behavior entirely.
-      default: []
-      selector:
-        action: {}
+        Optional settings for the built-in light toggle behavior. Leave these at
+        their defaults to keep the basic switch-to-toggle flow.
+      collapsed: true
+      input:
+        brightness_pct:
+          name: "🔆 Toggle brightness"
+          description: Brightness percentage to apply when toggling the smart light.
+          default: 85
+          selector:
+            number:
+              min: 1.0
+              max: 100.0
+              unit_of_measurement: "%"
+              step: 1.0
+              mode: slider
+        light_color:
+          name: "🎨 Optional light color"
+          description: >-
+            Optional RGB color to apply when turning the smart light on. Leave the
+            default empty value to keep the light's existing or integration-defined
+            color.
+          default: []
+          selector:
+            color_rgb:
+        custom_action:
+          name: "🔀 Optional custom action"
+          description: >-
+            Optional action sequence to run instead of the built-in `light.toggle`
+            behavior when the Shelly relay is already on. If empty, the blueprint
+            uses the default light toggle action.
+          default: []
+          selector:
+            action: {}
 
 mode: single
 
@@ -63,6 +88,7 @@ variables:
   shelly_relay: !input shelly_relay
   target_light: !input target_light
   brightness_pct: !input brightness_pct
+  light_color: !input light_color
   custom_action: !input custom_action
 
 trigger:
@@ -86,23 +112,33 @@ action:
       shelly_trigger_entity: "{{ trigger.entity_id }}"
       shelly_input_state: "{{ trigger.to_state.state }}"
       shelly_input_previous_state: "{{ trigger.from_state.state }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ custom_action | length > 0 }}"
-        sequence: !input custom_action
-    default:
-      - if:
-          - condition: state
-            entity_id: !input shelly_relay
-            state: "on"
-        then:
+  - if:
+      - condition: state
+        entity_id: !input shelly_relay
+        state: "on"
+    then:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ custom_action | length > 0 }}"
+            sequence: !input custom_action
+          - conditions:
+              - condition: template
+                value_template: "{{ light_color | length == 3 }}"
+            sequence:
+              - action: light.toggle
+                target:
+                  entity_id: !input target_light
+                data:
+                  brightness_pct: !input brightness_pct
+                  rgb_color: !input light_color
+        default:
           - action: light.toggle
             target:
               entity_id: !input target_light
             data:
               brightness_pct: !input brightness_pct
-        else:
-          - action: switch.turn_on
-            target:
-              entity_id: !input shelly_relay
+    else:
+      - action: switch.turn_on
+        target:
+          entity_id: !input shelly_relay
