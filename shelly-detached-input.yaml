@@ -62,15 +62,15 @@ blueprint:
               unit_of_measurement: "%"
               step: 1.0
               mode: slider
-        light_color:
-          name: "🎨 Optional light color"
+        light_color_temp:
+          name: "🌡️ Optional color temperature"
           description: >-
-            Optional RGB color to apply when turning the smart light on. Leave the
-            default empty value to keep the light's existing or integration-defined
-            color.
-          default: []
+            Optional color temperature to apply when turning the smart light on.
+            Leave the default empty value to keep the light's existing or
+            integration-defined color temperature.
+          default:
           selector:
-            color_rgb:
+            color_temp:
         custom_action:
           name: "🔀 Optional custom action"
           description: >-
@@ -88,7 +88,7 @@ variables:
   shelly_relay: !input shelly_relay
   target_light: !input target_light
   brightness_pct: !input brightness_pct
-  light_color: !input light_color
+  light_color_temp: !input light_color_temp
   custom_action: !input custom_action
 
 trigger:
@@ -124,14 +124,14 @@ action:
             sequence: !input custom_action
           - conditions:
               - condition: template
-                value_template: "{{ light_color | length == 3 }}"
+                value_template: "{{ light_color_temp is number }}"
             sequence:
               - action: light.toggle
                 target:
                   entity_id: !input target_light
                 data:
                   brightness_pct: !input brightness_pct
-                  rgb_color: !input light_color
+                  color_temp_kelvin: !input light_color_temp
         default:
           - action: light.toggle
             target:
