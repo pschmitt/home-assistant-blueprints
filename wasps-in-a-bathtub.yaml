@@ -4,97 +4,113 @@ blueprint:
   domain: automation
 
   input:
-    room_name:
-      name: 📛 Room name
-      description: "Room name, eg: master bathroom"
+    room_and_sensors:
+      name: Room And Sensors
+      icon: mdi:motion-sensor
+      description: Core room identity and the sensors used to infer bathroom activity.
+      input:
+        room_name:
+          name: 📛 Room name
+          description: "Room name, eg: master bathroom"
 
-    door_sensor:
-      name: 🚪 Door sensor
-      selector:
-        entity:
-          domain: binary_sensor
-          device_class: door
+        door_sensor:
+          name: 🚪 Door sensor
+          selector:
+            entity:
+              domain: binary_sensor
+              device_class: door
 
-    activity_sensors:
-      name: 🏃‍➡️ Activity sensors (motion / occupancy only)
-      description: "Select all sensors that indicate activity"
-      selector:
-        entity:
-          multiple: true
-          filter:
-            - domain: binary_sensor
-              device_class:
-                - motion
-                - occupancy
+        activity_sensors:
+          name: 🏃‍➡️ Activity sensors (motion / occupancy only)
+          description: "Select all sensors that indicate activity"
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: binary_sensor
+                  device_class:
+                    - motion
+                    - occupancy
 
-    motion_cooldowns_csv:
-      name: 🧊 Per-sensor cooldowns (CSV) — REQUIRED
-      description: |
-        Comma-separated integers **aligned to the order of Activity sensors**.
-        If you provide **exactly one** value (e.g. `10`), it is used for **all** sensors.
-        If you provide multiple values and fewer than your sensors, the **last** value is reused for the rest.
-        Examples:
-          - `10`           → all sensors use 10s
-          - `5, 8, 60`     → S1=5s, S2=8s, S3=60s
-          - `5, 8` (3 sensors) → S1=5s, S2=8s, S3=8s
-      selector:
-        text: {}
-      default: ""
+        motion_cooldowns_csv:
+          name: 🧊 Per-sensor cooldowns (CSV) — REQUIRED
+          description: |
+            Comma-separated integers **aligned to the order of Activity sensors**.
+            If you provide **exactly one** value (e.g. `10`), it is used for **all** sensors.
+            If you provide multiple values and fewer than your sensors, the **last** value is reused for the rest.
+            Examples:
+              - `10`           → all sensors use 10s
+              - `5, 8, 60`     → S1=5s, S2=8s, S3=60s
+              - `5, 8` (3 sensors) → S1=5s, S2=8s, S3=8s
+          selector:
+            text: {}
+          default: ""
 
-    target_light:
-      name: 💡 Light to control
-      selector:
-        entity:
-          domain: light
+    state_and_timing:
+      name: State And Timing
+      icon: mdi:timer-cog-outline
+      description: Helpers and timing controls used by the occupancy workflow.
+      input:
+        input_occupancy:
+          name: 🚾 input_boolean that holds the current occupancy state
+          selector:
+            entity:
+              domain: input_boolean
 
-    input_occupancy:
-      name: 🚾 input_boolean that holds the current occupancy state
-      selector:
-        entity:
-          domain: input_boolean
+        input_timer:
+          name: 🕝 timer that gets started when no occupancy is detected anymore
+          selector:
+            entity:
+              domain: timer
 
-    input_timer:
-      name: 🕝 timer that gets started when no occupancy is detected anymore
-      selector:
-        entity:
-          domain: timer
+        input_timeout:
+          name: 🔢 input_number (minutes) for auto-off after occupancy ends / door-open motion
+          selector:
+            entity:
+              domain: input_number
 
-    input_timeout:
-      name: 🔢 input_number (minutes) for auto-off after occupancy ends / door-open motion
-      selector:
-        entity:
-          domain: input_number
+        ttl:
+          name: 🌙 Time-to-Live (seconds) after door closes
+          selector:
+            number:
+              min: 0
+              max: 3600
+              step: 1
+              unit_of_measurement: seconds
+          default: 65
 
-    illuminance_sensor:
-      name: 🌞 Illuminance sensor (optional)
-      description: If set, the light will only turn on when illuminance is below the cutoff
-      default: ""
-      selector:
-        entity:
-          domain: sensor
-          device_class: illuminance
+    lighting:
+      name: Lighting
+      icon: mdi:lightbulb-auto-outline
+      description: Target light plus optional illuminance gating.
+      collapsed: true
+      input:
+        target_light:
+          name: 💡 Light to control
+          selector:
+            entity:
+              domain: light
 
-    illuminance_cutoff:
-      name: 🌞 Illuminance cutoff (lx)
-      description: Do not turn on the light when the measured illuminance is at or above this value
-      default: 100
-      selector:
-        number:
-          min: 0
-          max: 10000
-          step: 1
-          unit_of_measurement: lx
-          mode: slider
+        illuminance_sensor:
+          name: 🌞 Illuminance sensor (optional)
+          description: If set, the light will only turn on when illuminance is below the cutoff
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+              device_class: illuminance
 
-    ttl:
-      name: 🌙 Time-to-Live (seconds) after door closes
-      selector:
-        number:
-          min: 0
-          max: 3600
-          step: 1
-          unit_of_measurement: seconds
-      default: 65
+        illuminance_cutoff:
+          name: 🌞 Illuminance cutoff (lx)
+          description: Do not turn on the light when the measured illuminance is at or above this value
+          default: 100
+          selector:
+            number:
+              min: 0
+              max: 10000
+              step: 1
+              unit_of_measurement: lx
+              mode: slider
 
 mode: restart
 trace:
