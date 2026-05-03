@@ -112,33 +112,43 @@ action:
       shelly_trigger_entity: "{{ trigger.entity_id }}"
       shelly_input_state: "{{ trigger.to_state.state }}"
       shelly_input_previous_state: "{{ trigger.from_state.state }}"
+      smart_light_available: >-
+        {{ states(target_light) not in ['unavailable', 'unknown'] }}
   - if:
-      - condition: state
-        entity_id: !input shelly_relay
-        state: "on"
+      - condition: template
+        value_template: "{{ not smart_light_available }}"
     then:
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: "{{ custom_action | length > 0 }}"
-            sequence: !input custom_action
-          - conditions:
-              - condition: template
-                value_template: "{{ light_color_temp is number }}"
-            sequence:
+      - action: switch.toggle
+        target:
+          entity_id: !input shelly_relay
+    else:
+      - if:
+          - condition: state
+            entity_id: !input shelly_relay
+            state: "on"
+        then:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ custom_action | length > 0 }}"
+                sequence: !input custom_action
+              - conditions:
+                  - condition: template
+                    value_template: "{{ light_color_temp is number }}"
+                sequence:
+                  - action: light.toggle
+                    target:
+                      entity_id: !input target_light
+                    data:
+                      brightness_pct: !input brightness_pct
+                      color_temp_kelvin: !input light_color_temp
+            default:
               - action: light.toggle
                 target:
                   entity_id: !input target_light
                 data:
                   brightness_pct: !input brightness_pct
-                  color_temp_kelvin: !input light_color_temp
-        default:
-          - action: light.toggle
+        else:
+          - action: switch.turn_on
             target:
-              entity_id: !input target_light
-            data:
-              brightness_pct: !input brightness_pct
-    else:
-      - action: switch.turn_on
-        target:
-          entity_id: !input shelly_relay
+              entity_id: !input shelly_relay
