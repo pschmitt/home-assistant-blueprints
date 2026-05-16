@@ -148,6 +148,17 @@ action:
                   entity_id: !input target_light
                 data:
                   brightness_pct: !input brightness_pct
+          - wait_for_trigger:
+              - platform: state
+                entity_id: !input target_light
+            timeout: "00:00:02"
+          - if:
+              - condition: template
+                value_template: "{{ not wait.completed }}"
+            then:
+              - action: switch.toggle
+                target:
+                  entity_id: !input shelly_relay
         else:
           - action: switch.turn_on
             target:
