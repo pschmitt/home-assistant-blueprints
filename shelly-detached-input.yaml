@@ -127,6 +127,8 @@ action:
             entity_id: !input shelly_relay
             state: "on"
         then:
+          - variables:
+              light_last_updated: "{{ states[target_light].last_updated }}"
           - choose:
               - conditions:
                   - condition: template
@@ -148,9 +150,7 @@ action:
                   entity_id: !input target_light
                 data:
                   brightness_pct: !input brightness_pct
-          - wait_for_trigger:
-              - platform: state
-                entity_id: !input target_light
+          - wait_template: "{{ states[target_light].last_updated != light_last_updated }}"
             timeout: "00:00:02"
           - if:
               - condition: template
