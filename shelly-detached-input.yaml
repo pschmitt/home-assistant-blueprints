@@ -81,7 +81,7 @@ blueprint:
           selector:
             action: {}
 
-mode: single
+mode: restart
 
 variables:
   shelly_input: !input shelly_input
