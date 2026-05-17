@@ -167,7 +167,19 @@ variables:
     {% set excl_dids = exclude.device_id | default([]) %}
     {% set ns = namespace(battery_dids=[], seen=[], items=[]) %}
     {% if check_battery_offline %}
-      {% for s in (states.sensor + states.binary_sensor)
+      {% for s in states.sensor
+           | selectattr('attributes.device_class', 'defined')
+           | selectattr('attributes.device_class', '==', 'battery')
+           | selectattr('state', '==', 'unavailable') %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is not none and did not in ns.battery_dids and did not in excl_dids
+             and device_attr(did, 'disabled_by') is none %}
+            {% set ns.battery_dids = ns.battery_dids + [did] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% for s in states.binary_sensor
            | selectattr('attributes.device_class', 'defined')
            | selectattr('attributes.device_class', '==', 'battery')
            | selectattr('state', '==', 'unavailable') %}
