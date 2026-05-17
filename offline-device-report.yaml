@@ -156,12 +156,27 @@ variables:
     {% set mobile = integration_entities('mobile_app') if ignore_mobile_devices else [] %}
     {% set excl_eids = exclude.entity_id | default([]) %}
     {% set excl_dids = exclude.device_id | default([]) %}
-    {% set ns = namespace(seen=[], items=[]) %}
+    {% set ns = namespace(battery_dids=[], seen=[], items=[]) %}
+    {% if check_battery_offline %}
+      {% for s in (states.sensor + states.binary_sensor)
+           | selectattr('attributes.device_class', 'defined')
+           | selectattr('attributes.device_class', '==', 'battery')
+           | selectattr('state', '==', 'unavailable') %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is not none and did not in ns.battery_dids and did not in excl_dids
+             and device_attr(did, 'disabled_by') is none %}
+            {% set ns.battery_dids = ns.battery_dids + [did] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
     {% if check_offline_devices %}
       {% for s in states | selectattr('state', '==', 'unavailable') %}
         {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
           {% set did = device_id(s.entity_id) %}
-          {% if did is not none and did not in ns.seen and did not in excl_dids %}
+          {% if did is not none and did not in ns.seen and did not in excl_dids
+             and did not in ns.battery_dids %}
             {% if device_attr(did, 'disabled_by') is none %}
               {% set ns.seen = ns.seen + [did] %}
               {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
