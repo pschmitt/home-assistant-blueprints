@@ -28,16 +28,27 @@ blueprint:
             time: {}
         day:
           name: "📅 Day of week"
-          description: >
-            Day of the week to run the check.
-            0 = every day · 1 = Monday · 7 = Sunday.
-          default: 7
+          description: "Day of the week to run the check."
+          default: "7"
           selector:
-            number:
-              min: 0
-              max: 7
-              mode: slider
-              step: 1
+            select:
+              options:
+                - label: "Every day"
+                  value: "0"
+                - label: "Monday"
+                  value: "1"
+                - label: "Tuesday"
+                  value: "2"
+                - label: "Wednesday"
+                  value: "3"
+                - label: "Thursday"
+                  value: "4"
+                - label: "Friday"
+                  value: "5"
+                - label: "Saturday"
+                  value: "6"
+                - label: "Sunday"
+                  value: "7"
 
     battery_section:
       name: "🔋 Battery Devices"
