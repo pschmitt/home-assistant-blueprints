@@ -157,7 +157,7 @@ variables:
         {% endif %}
       {% endfor %}
     {% endif %}
-    {{ ns.items | join('\n') }}
+    {{ ns.items | sort | join('\n') }}
   battery_count: >
     {% set bl = battery_list | trim %}
     {{ (bl.count('\n') + 1) if bl else 0 }}
@@ -194,7 +194,7 @@ variables:
         {% endif %}
       {% endfor %}
     {% endif %}
-    {{ ns.items | join('\n') }}
+    {{ ns.items | sort | join('\n') }}
   offline_count: >
     {% set ol = offline_list | trim %}
     {{ (ol.count('\n') + 1) if ol else 0 }}
