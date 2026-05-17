@@ -11,6 +11,15 @@ blueprint:
 
     `{{ battery_list }}` · `{{ battery_count }}` · `{{ offline_list }}` ·
     `{{ offline_count }}` · `{{ report }}`
+
+
+    **Trigger manually via CLI:**
+
+    ```
+
+    hass-cli service call automation.trigger --arguments "entity_id=automation.battery_device_has_gone_offline"
+
+    ```
   domain: automation
   homeassistant:
     min_version: "2023.11.0"
