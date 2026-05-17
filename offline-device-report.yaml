@@ -50,10 +50,10 @@ blueprint:
                 - label: "Sunday"
                   value: "7"
 
-    battery_section:
-      name: "🔋 Battery Devices"
-      icon: mdi:battery-alert
-      description: "Settings for offline battery sensor detection."
+    checks_section:
+      name: "🔍 Checks"
+      icon: mdi:magnify
+      description: "What to include in the report."
       input:
         check_battery_offline:
           name: "🔋 Report offline battery devices"
@@ -63,12 +63,6 @@ blueprint:
           default: true
           selector:
             boolean: {}
-
-    offline_section:
-      name: "📡 Offline Devices"
-      icon: mdi:wifi-off
-      description: "Settings for general offline device detection."
-      input:
         check_offline_devices:
           name: "📡 Report all offline devices"
           description: >
