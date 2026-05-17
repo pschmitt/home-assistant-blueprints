@@ -1,0 +1,204 @@
+blueprint:
+  name: "📵 Weekly Offline & Battery Report"
+  description: >
+    📅 Sends a weekly report of battery devices that have gone offline and/or
+    any unavailable devices. Disabled devices are automatically skipped.
+    Mobile companion-app devices can be silenced with a single toggle instead
+    of maintaining a long exclude list.
+
+
+    **Template variables available in actions:**
+
+    `{{ battery_list }}` · `{{ battery_count }}` · `{{ offline_list }}` ·
+    `{{ offline_count }}` · `{{ report }}`
+  domain: automation
+  homeassistant:
+    min_version: "2023.11.0"
+  input:
+    schedule_section:
+      name: "⏰ Schedule"
+      icon: mdi:clock-outline
+      description: "When to run the offline device check."
+      input:
+        time:
+          name: "🕐 Check time"
+          description: "Time of day to run the report."
+          default: "10:00:00"
+          selector:
+            time: {}
+        day:
+          name: "📅 Day of week"
+          description: >
+            Day of the week to run the check.
+            0 = every day · 1 = Monday · 7 = Sunday.
+          default: 7
+          selector:
+            number:
+              min: 0
+              max: 7
+              mode: slider
+              step: 1
+
+    battery_section:
+      name: "🔋 Battery Devices"
+      icon: mdi:battery-alert
+      description: "Settings for offline battery sensor detection."
+      input:
+        check_battery_offline:
+          name: "🔋 Report offline battery devices"
+          description: >
+            Notify when sensors/binary_sensors with device_class: battery
+            become unavailable.
+          default: true
+          selector:
+            boolean: {}
+
+    offline_section:
+      name: "📡 Offline Devices"
+      icon: mdi:wifi-off
+      description: "Settings for general offline device detection."
+      input:
+        check_offline_devices:
+          name: "📡 Report all offline devices"
+          description: >
+            Notify when any device becomes unavailable. Results are grouped
+            by device (not by individual entity) to keep the report concise.
+            Entities with no associated physical device are skipped.
+          default: false
+          selector:
+            boolean: {}
+
+    exclusion_section:
+      name: "🙈 Exclusions"
+      icon: mdi:eye-off
+      description: "Configure what to exclude from the checks."
+      input:
+        ignore_mobile_devices:
+          name: "📱 Ignore mobile devices"
+          description: >
+            Skip all entities from the Mobile App integration (iOS / Android
+            companion apps). Prevents false positives from phones and tablets
+            without needing a long exclude list.
+          default: true
+          selector:
+            boolean: {}
+        exclude:
+          name: "🚫 Additional excluded entities / devices / areas"
+          description: >
+            Specific entities, devices, or areas to always exclude from all
+            checks regardless of device type.
+          default:
+            entity_id: []
+          selector:
+            target: {}
+
+    notification_section:
+      name: "🔔 Notifications"
+      icon: mdi:bell-alert
+      description: >
+        Actions to run when problems are detected.
+
+
+        Available template variables: `{{ report }}`, `{{ battery_list }}`,
+        `{{ battery_count }}`, `{{ offline_list }}`, `{{ offline_count }}`.
+      input:
+        actions:
+          name: "🔔 Actions"
+          description: "Notifications or other actions to trigger."
+          selector:
+            action: {}
+
+variables:
+  day: !input day
+  check_battery_offline: !input check_battery_offline
+  check_offline_devices: !input check_offline_devices
+  ignore_mobile_devices: !input ignore_mobile_devices
+  exclude: !input exclude
+  battery_list: >
+    {% set mobile = integration_entities('mobile_app') if ignore_mobile_devices else [] %}
+    {% set excl_eids = exclude.entity_id | default([]) %}
+    {% set excl_dids = exclude.device_id | default([]) %}
+    {% set ns = namespace(items=[]) %}
+    {% if check_battery_offline %}
+      {% for s in states.sensor
+           | selectattr('attributes.device_class', 'defined')
+           | selectattr('attributes.device_class', '==', 'battery')
+           | selectattr('state', '==', 'unavailable') %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is none or (did not in excl_dids and device_attr(did, 'disabled_by') is none) %}
+            {% set ns.items = ns.items + [s.name] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% for s in states.binary_sensor
+           | selectattr('attributes.device_class', 'defined')
+           | selectattr('attributes.device_class', '==', 'battery')
+           | selectattr('state', '==', 'unavailable') %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is none or (did not in excl_dids and device_attr(did, 'disabled_by') is none) %}
+            {% set ns.items = ns.items + [s.name] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {{ ns.items | join('\n') }}
+  battery_count: >
+    {% set bl = battery_list | trim %}
+    {{ (bl.count('\n') + 1) if bl else 0 }}
+  offline_list: >
+    {% set mobile = integration_entities('mobile_app') if ignore_mobile_devices else [] %}
+    {% set excl_eids = exclude.entity_id | default([]) %}
+    {% set excl_dids = exclude.device_id | default([]) %}
+    {% set ns = namespace(seen=[], items=[]) %}
+    {% if check_offline_devices %}
+      {% for s in states | selectattr('state', '==', 'unavailable') %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is not none and did not in ns.seen and did not in excl_dids %}
+            {% if device_attr(did, 'disabled_by') is none %}
+              {% set ns.seen = ns.seen + [did] %}
+              {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
+            {% endif %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {{ ns.items | join('\n') }}
+  offline_count: >
+    {% set ol = offline_list | trim %}
+    {{ (ol.count('\n') + 1) if ol else 0 }}
+  report: >
+    {% set ns = namespace(parts=[]) %}
+    {% set bl = battery_list | trim %}
+    {% set ol = offline_list | trim %}
+    {% if bl %}
+      {% set header = '🔋 Offline battery devices (' ~ (battery_count | trim) ~ '):' %}
+      {% set body = '• ' ~ (bl | replace('\n', '\n• ')) %}
+      {% set ns.parts = ns.parts + [header ~ '\n' ~ body] %}
+    {% endif %}
+    {% if ol %}
+      {% set header = '📡 Offline devices (' ~ (offline_count | trim) ~ '):' %}
+      {% set body = '• ' ~ (ol | replace('\n', '\n• ')) %}
+      {% set ns.parts = ns.parts + [header ~ '\n' ~ body] %}
+    {% endif %}
+    {{ ns.parts | join('\n\n') }}
+
+trigger:
+  - platform: time
+    at: !input time
+
+condition:
+  - condition: template
+    value_template: >
+      {{ day | int == 0 or day | int == now().isoweekday() }}
+  - condition: template
+    value_template: >
+      {{ (battery_list | trim | length > 0) or (offline_list | trim | length > 0) }}
+
+action:
+  - choose: []
+    default: !input actions
+
+mode: single
