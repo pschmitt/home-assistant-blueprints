@@ -81,6 +81,15 @@ blueprint:
           default: false
           selector:
             boolean: {}
+        require_all_entities_unavailable:
+          name: "🔒 Strict offline detection"
+          description: >
+            Only report a device as offline when ALL of its entities are
+            unavailable. Prevents false positives from devices that are mostly
+            working but happen to have one flaky sensor.
+          default: true
+          selector:
+            boolean: {}
 
     exclusion_section:
       name: "🙈 Exclusions"
@@ -126,6 +135,7 @@ variables:
   day: !input day
   check_battery_offline: !input check_battery_offline
   check_offline_devices: !input check_offline_devices
+  require_all_entities_unavailable: !input require_all_entities_unavailable
   ignore_mobile_devices: !input ignore_mobile_devices
   exclude: !input exclude
   battery_list: >
@@ -199,8 +209,22 @@ variables:
           {% if did is not none and did not in ns.seen and did not in excl_dids
              and did not in ns.battery_dids %}
             {% if device_attr(did, 'disabled_by') is none %}
-              {% set ns.seen = ns.seen + [did] %}
-              {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
+              {% if require_all_entities_unavailable %}
+                {% set all_eids = device_entities(did) | list %}
+                {% set ns2 = namespace(all_unavail=true) %}
+                {% for eid in all_eids %}
+                  {% if states(eid) != 'unavailable' %}
+                    {% set ns2.all_unavail = false %}
+                  {% endif %}
+                {% endfor %}
+                {% if ns2.all_unavail and all_eids | count > 0 %}
+                  {% set ns.seen = ns.seen + [did] %}
+                  {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
+                {% endif %}
+              {% else %}
+                {% set ns.seen = ns.seen + [did] %}
+                {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
+              {% endif %}
             {% endif %}
           {% endif %}
         {% endif %}
