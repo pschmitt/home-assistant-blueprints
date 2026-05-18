@@ -71,6 +71,42 @@ blueprint:
           default:
           selector:
             color_temp:
+        fallback_power_sensor:
+          name: "⚡ Optional fallback power sensor"
+          description: >-
+            Optional power sensor for the smart light circuit. When the smart
+            light itself is unavailable, the blueprint can use this reading to
+            decide whether the bulb is effectively on or off while the relay is
+            still on.
+          default:
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: power
+        fallback_off_threshold_w:
+          name: "📏 Fallback off threshold"
+          description: >-
+            When the smart light is unavailable, readings at or below this
+            wattage are treated as "light off" and trigger a relay power-cycle.
+          default: 1
+          selector:
+            number:
+              min: 0.0
+              max: 25.0
+              unit_of_measurement: "W"
+              step: 0.1
+              mode: box
+        fallback_power_cycle_delay:
+          name: "⏱️ Fallback power-cycle delay"
+          description: >-
+            Delay between turning the relay off and back on when the unavailable
+            smart light is inferred to be off from the fallback power reading.
+          default:
+            milliseconds: 250
+          selector:
+            duration:
+              enable_millisecond: true
         custom_action:
           name: "🔀 Optional custom action"
           description: >-
@@ -89,6 +125,9 @@ variables:
   target_light: !input target_light
   brightness_pct: !input brightness_pct
   light_color_temp: !input light_color_temp
+  fallback_power_sensor: !input fallback_power_sensor
+  fallback_off_threshold_w: !input fallback_off_threshold_w
+  fallback_power_cycle_delay: !input fallback_power_cycle_delay
   custom_action: !input custom_action
 
 trigger:
@@ -114,13 +153,54 @@ action:
       shelly_input_previous_state: "{{ trigger.from_state.state }}"
       smart_light_available: >-
         {{ states(target_light) not in ['unavailable', 'unknown'] }}
+      relay_is_on: "{{ is_state(shelly_relay, 'on') }}"
+      fallback_power_sensor_available: >-
+        {{
+          fallback_power_sensor is not none
+          and states(fallback_power_sensor) not in ['unavailable', 'unknown']
+        }}
+      fallback_power_w: >-
+        {% if fallback_power_sensor is not none %}
+          {{ states(fallback_power_sensor) | float(0) }}
+        {% else %}
+          0
+        {% endif %}
   - if:
       - condition: template
         value_template: "{{ not smart_light_available }}"
     then:
-      - action: switch.toggle
-        target:
-          entity_id: !input shelly_relay
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ not relay_is_on }}"
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: !input shelly_relay
+          - conditions:
+              - condition: template
+                value_template: "{{ fallback_power_sensor_available }}"
+              - condition: template
+                value_template: "{{ fallback_power_w > (fallback_off_threshold_w | float(0)) }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: !input shelly_relay
+          - conditions:
+              - condition: template
+                value_template: "{{ fallback_power_sensor_available }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: !input shelly_relay
+              - delay: !input fallback_power_cycle_delay
+              - action: switch.turn_on
+                target:
+                  entity_id: !input shelly_relay
+        default:
+          - action: switch.toggle
+            target:
+              entity_id: !input shelly_relay
     else:
       - if:
           - condition: state
