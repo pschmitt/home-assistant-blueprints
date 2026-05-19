@@ -103,7 +103,7 @@ blueprint:
             Delay between turning the relay off and back on when the unavailable
             smart light is inferred to be off from the fallback power reading.
           default:
-            milliseconds: 250
+            milliseconds: 800
           selector:
             duration:
               enable_millisecond: true
