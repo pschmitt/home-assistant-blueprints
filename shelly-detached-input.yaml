@@ -75,15 +75,27 @@ blueprint:
           name: "⚡ Optional fallback power sensor"
           description: >-
             Optional power sensor for the smart light circuit. When the smart
-            light itself is unavailable, the blueprint can use this reading to
-            decide whether the bulb is effectively on or off while the relay is
-            still on.
+            light itself is unavailable, or when the bulb does not react to a
+            toggle command, the blueprint can use this reading to decide
+            whether the bulb is effectively on or off while the relay is still
+            on.
           default:
           selector:
             entity:
               filter:
                 - domain: sensor
                   device_class: power
+        light_state_change_timeout:
+          name: "⌛ Light state change timeout"
+          description: >-
+            How long to wait for the smart bulb to react after the blueprint
+            sends its built-in on or off command. If the expected light state
+            or power draw is not observed within this window, the Shelly relay
+            is toggled as a recovery step.
+          default:
+            seconds: 1
+          selector:
+            duration:
         fallback_off_threshold_w:
           name: "📏 Fallback off threshold"
           description: >-
@@ -110,9 +122,9 @@ blueprint:
         custom_action:
           name: "🔀 Optional custom action"
           description: >-
-            Optional action sequence to run instead of the built-in `light.toggle`
-            behavior when the Shelly relay is already on. If empty, the blueprint
-            uses the default light toggle action.
+            Optional action sequence to run instead of the built-in light
+            toggle behavior when the Shelly relay is already on. If empty, the
+            blueprint uses the default smart-light toggle action.
           default: []
           selector:
             action: {}
@@ -126,6 +138,7 @@ variables:
   brightness_pct: !input brightness_pct
   light_color_temp: !input light_color_temp
   fallback_power_sensor: !input fallback_power_sensor
+  light_state_change_timeout: !input light_state_change_timeout
   fallback_off_threshold_w: !input fallback_off_threshold_w
   fallback_power_cycle_delay: !input fallback_power_cycle_delay
   custom_action: !input custom_action
@@ -153,6 +166,7 @@ action:
       shelly_input_previous_state: "{{ trigger.from_state.state }}"
       smart_light_available: >-
         {{ states(target_light) not in ['unavailable', 'unknown'] }}
+      expected_light_state: "{{ 'off' if is_state(target_light, 'on') else 'on' }}"
       relay_is_on: "{{ is_state(shelly_relay, 'on') }}"
       fallback_power_sensor_available: >-
         {{
@@ -207,8 +221,6 @@ action:
             entity_id: !input shelly_relay
             state: "on"
         then:
-          - variables:
-              light_last_updated: "{{ states[target_light].last_updated }}"
           - choose:
               - conditions:
                   - condition: template
@@ -216,29 +228,58 @@ action:
                 sequence: !input custom_action
               - conditions:
                   - condition: template
-                    value_template: "{{ light_color_temp is number }}"
+                    value_template: "{{ expected_light_state == 'on' and light_color_temp is number }}"
                 sequence:
-                  - action: light.toggle
+                  - action: light.turn_on
                     target:
                       entity_id: !input target_light
                     data:
                       brightness_pct: !input brightness_pct
                       color_temp_kelvin: !input light_color_temp
+              - conditions:
+                  - condition: template
+                    value_template: "{{ expected_light_state == 'on' }}"
+                sequence:
+                  - action: light.turn_on
+                    target:
+                      entity_id: !input target_light
+                    data:
+                      brightness_pct: !input brightness_pct
             default:
-              - action: light.toggle
+              - action: light.turn_off
                 target:
                   entity_id: !input target_light
-                data:
-                  brightness_pct: !input brightness_pct
-          - wait_template: "{{ states[target_light].last_updated != light_last_updated }}"
-            timeout: "00:00:02"
           - if:
               - condition: template
-                value_template: "{{ not wait.completed }}"
+                value_template: "{{ custom_action | length == 0 }}"
             then:
-              - action: switch.toggle
-                target:
-                  entity_id: !input shelly_relay
+              - wait_template: >-
+                  {{
+                    is_state(target_light, expected_light_state)
+                    or (
+                      fallback_power_sensor is not none
+                      and states(fallback_power_sensor) not in ['unavailable', 'unknown']
+                      and (
+                        (
+                          expected_light_state == 'off'
+                          and (states(fallback_power_sensor) | float(0)) <= (fallback_off_threshold_w | float(0))
+                        )
+                        or
+                        (
+                          expected_light_state == 'on'
+                          and (states(fallback_power_sensor) | float(0)) > (fallback_off_threshold_w | float(0))
+                        )
+                      )
+                    )
+                  }}
+                timeout: !input light_state_change_timeout
+              - if:
+                  - condition: template
+                    value_template: "{{ not wait.completed }}"
+                then:
+                  - action: switch.toggle
+                    target:
+                      entity_id: !input shelly_relay
         else:
           - action: switch.turn_on
             target:
