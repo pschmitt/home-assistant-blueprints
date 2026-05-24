@@ -149,6 +149,18 @@ variables:
   ignore_mobile_devices: !input ignore_mobile_devices
   exclude: !input exclude
   exclude_labels: !input exclude_labels
+  lbl_excl_eids: >
+    {% set ns = namespace(items=[]) %}
+    {% for lbl in exclude_labels %}
+      {% set ns.items = ns.items + (label_entities(lbl) | list) %}
+    {% endfor %}
+    {{ ns.items }}
+  lbl_excl_dids: >
+    {% set ns = namespace(items=[]) %}
+    {% for lbl in exclude_labels %}
+      {% set ns.items = ns.items + (label_devices(lbl) | list) %}
+    {% endfor %}
+    {{ ns.items }}
   battery_list: >
     {% set mobile = integration_entities('mobile_app') if ignore_mobile_devices else [] %}
     {% set excl_eids = exclude.entity_id | default([]) %}
@@ -159,13 +171,12 @@ variables:
            | selectattr('attributes.device_class', 'defined')
            | selectattr('attributes.device_class', '==', 'battery')
            | selectattr('state', '==', 'unavailable') %}
-        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
-          {% if exclude_labels | select('in', labels(s.entity_id)) | list | count == 0 %}
-            {% set did = device_id(s.entity_id) %}
-            {% if did is none or (did not in excl_dids and device_attr(did, 'disabled_by') is none
-                 and exclude_labels | select('in', device_labels(did)) | list | count == 0) %}
-              {% set ns.items = ns.items + [s.name] %}
-            {% endif %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile
+             and s.entity_id not in lbl_excl_eids %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is none or (did not in excl_dids and did not in lbl_excl_dids
+               and device_attr(did, 'disabled_by') is none) %}
+            {% set ns.items = ns.items + [s.name] %}
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -173,13 +184,12 @@ variables:
            | selectattr('attributes.device_class', 'defined')
            | selectattr('attributes.device_class', '==', 'battery')
            | selectattr('state', '==', 'unavailable') %}
-        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
-          {% if exclude_labels | select('in', labels(s.entity_id)) | list | count == 0 %}
-            {% set did = device_id(s.entity_id) %}
-            {% if did is none or (did not in excl_dids and device_attr(did, 'disabled_by') is none
-                 and exclude_labels | select('in', device_labels(did)) | list | count == 0) %}
-              {% set ns.items = ns.items + [s.name] %}
-            {% endif %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile
+             and s.entity_id not in lbl_excl_eids %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is none or (did not in excl_dids and did not in lbl_excl_dids
+               and device_attr(did, 'disabled_by') is none) %}
+            {% set ns.items = ns.items + [s.name] %}
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -198,14 +208,12 @@ variables:
            | selectattr('attributes.device_class', 'defined')
            | selectattr('attributes.device_class', '==', 'battery')
            | selectattr('state', '==', 'unavailable') %}
-        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
-          {% if exclude_labels | select('in', labels(s.entity_id)) | list | count == 0 %}
-            {% set did = device_id(s.entity_id) %}
-            {% if did is not none and did not in ns.battery_dids and did not in excl_dids
-               and device_attr(did, 'disabled_by') is none
-               and exclude_labels | select('in', device_labels(did)) | list | count == 0 %}
-              {% set ns.battery_dids = ns.battery_dids + [did] %}
-            {% endif %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile
+             and s.entity_id not in lbl_excl_eids %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is not none and did not in ns.battery_dids and did not in excl_dids
+             and did not in lbl_excl_dids and device_attr(did, 'disabled_by') is none %}
+            {% set ns.battery_dids = ns.battery_dids + [did] %}
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -213,14 +221,12 @@ variables:
            | selectattr('attributes.device_class', 'defined')
            | selectattr('attributes.device_class', '==', 'battery')
            | selectattr('state', '==', 'unavailable') %}
-        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
-          {% if exclude_labels | select('in', labels(s.entity_id)) | list | count == 0 %}
-            {% set did = device_id(s.entity_id) %}
-            {% if did is not none and did not in ns.battery_dids and did not in excl_dids
-               and device_attr(did, 'disabled_by') is none
-               and exclude_labels | select('in', device_labels(did)) | list | count == 0 %}
-              {% set ns.battery_dids = ns.battery_dids + [did] %}
-            {% endif %}
+        {% if s.entity_id not in excl_eids and s.entity_id not in mobile
+             and s.entity_id not in lbl_excl_eids %}
+          {% set did = device_id(s.entity_id) %}
+          {% if did is not none and did not in ns.battery_dids and did not in excl_dids
+             and did not in lbl_excl_dids and device_attr(did, 'disabled_by') is none %}
+            {% set ns.battery_dids = ns.battery_dids + [did] %}
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -230,9 +236,8 @@ variables:
         {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
           {% set did = device_id(s.entity_id) %}
           {% if did is not none and did not in ns.seen and did not in excl_dids
-             and did not in ns.battery_dids %}
-            {% if device_attr(did, 'disabled_by') is none
-               and exclude_labels | select('in', device_labels(did)) | list | count == 0 %}
+             and did not in lbl_excl_dids and did not in ns.battery_dids %}
+            {% if device_attr(did, 'disabled_by') is none %}
               {% if require_all_entities_unavailable %}
                 {% set all_eids = device_entities(did) | list %}
                 {% set ns2 = namespace(all_unavail=true) %}
