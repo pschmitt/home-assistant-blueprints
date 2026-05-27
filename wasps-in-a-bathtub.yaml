@@ -299,12 +299,16 @@ action:
                   seconds: "{{ current_cooldown }}"
                 continue_on_timeout: true
 
-              - service: timer.start
-                data:
-                  duration:
-                    seconds: "{{ timeout_seconds | int }}"
-                target:
-                  entity_id: !input input_timer
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(target_light, 'on') }}"
+                then:
+                  - service: timer.start
+                    data:
+                      duration:
+                        seconds: "{{ timeout_seconds | int }}"
+                    target:
+                      entity_id: !input input_timer
 
       # --- Input occupancy turned ON (manual/external) ---
       - conditions:
@@ -373,12 +377,17 @@ action:
         sequence:
           # Do NOT set occupancy here. We only set it on post-close activity.
           # Simply start the TTL; any subsequent activity_on will cancel & mark occupied.
-          - service: timer.start
-            data:
-              duration:
-                seconds: "{{ ttl_seconds | int }}"
-            target:
-              entity_id: !input input_timer
+          # Skip if lux was high and the light was never turned on.
+          - if:
+              - condition: template
+                value_template: "{{ is_state(target_light, 'on') }}"
+            then:
+              - service: timer.start
+                data:
+                  duration:
+                    seconds: "{{ ttl_seconds | int }}"
+                target:
+                  entity_id: !input input_timer
 
       # --- Timer finished ---
       - conditions:
