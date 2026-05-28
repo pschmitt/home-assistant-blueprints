@@ -212,7 +212,11 @@ action:
                 target:
                   entity_id: !input shelly_relay
         default:
-          - action: switch.toggle
+          - action: switch.turn_off
+            target:
+              entity_id: !input shelly_relay
+          - delay: !input fallback_power_cycle_delay
+          - action: switch.turn_on
             target:
               entity_id: !input shelly_relay
     else:
@@ -277,9 +281,21 @@ action:
                   - condition: template
                     value_template: "{{ not wait.completed }}"
                 then:
-                  - action: switch.toggle
-                    target:
-                      entity_id: !input shelly_relay
+                  - if:
+                      - condition: template
+                        value_template: "{{ expected_light_state == 'on' }}"
+                    then:
+                      - action: switch.turn_off
+                        target:
+                          entity_id: !input shelly_relay
+                      - delay: !input fallback_power_cycle_delay
+                      - action: switch.turn_on
+                        target:
+                          entity_id: !input shelly_relay
+                    else:
+                      - action: switch.turn_off
+                        target:
+                          entity_id: !input shelly_relay
         else:
           - action: switch.turn_on
             target:
