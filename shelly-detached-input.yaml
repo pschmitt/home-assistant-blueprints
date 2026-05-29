@@ -179,6 +179,13 @@ action:
         {% else %}
           0
         {% endif %}
+      power_before_cmd: >-
+        {% if fallback_power_sensor is not none
+             and states(fallback_power_sensor) not in ['unavailable', 'unknown'] %}
+          {{ states(fallback_power_sensor) | float(0) }}
+        {% else %}
+          0
+        {% endif %}
   - if:
       - condition: template
         value_template: "{{ not smart_light_available }}"
@@ -266,12 +273,12 @@ action:
                       and (
                         (
                           expected_light_state == 'off'
-                          and (states(fallback_power_sensor) | float(0)) <= (fallback_off_threshold_w | float(0))
+                          and (states(fallback_power_sensor) | float(0)) < (power_before_cmd - (fallback_off_threshold_w | float(0)))
                         )
                         or
                         (
                           expected_light_state == 'on'
-                          and (states(fallback_power_sensor) | float(0)) > (fallback_off_threshold_w | float(0))
+                          and (states(fallback_power_sensor) | float(0)) > (power_before_cmd + (fallback_off_threshold_w | float(0)))
                         )
                       )
                     )
