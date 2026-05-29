@@ -75,18 +75,19 @@ blueprint:
         check_offline_devices:
           name: "📡 Report all offline devices"
           description: >
-            Notify when any device becomes unavailable. Results are grouped
-            by device (not by individual entity) to keep the report concise.
-            Entities with no associated physical device are skipped.
+            Notify when a device goes offline. Sourced from the offline_devices
+            integration (binary_sensor.offline_devices_devices_offline), which
+            reports devices whose entities are all unavailable. Requires that
+            integration to be set up.
           default: false
           selector:
             boolean: {}
         require_all_entities_unavailable:
           name: "🔒 Strict offline detection"
           description: >
-            Only report a device as offline when ALL of its entities are
-            unavailable. Prevents false positives from devices that are mostly
-            working but happen to have one flaky sensor.
+            No longer used for the offline-devices list: the offline_devices
+            integration is always strict (a device is offline only when ALL of
+            its entities are unavailable). Kept for backward compatibility.
           default: true
           selector:
             boolean: {}
@@ -232,30 +233,22 @@ variables:
       {% endfor %}
     {% endif %}
     {% if check_offline_devices %}
-      {% for s in states | selectattr('state', '==', 'unavailable') %}
-        {% if s.entity_id not in excl_eids and s.entity_id not in mobile %}
-          {% set did = device_id(s.entity_id) %}
-          {% if did is not none and did not in ns.seen and did not in excl_dids
-             and did not in lbl_excl_dids and did not in ns.battery_dids %}
-            {% if device_attr(did, 'disabled_by') is none %}
-              {% if require_all_entities_unavailable %}
-                {% set all_eids = device_entities(did) | list %}
-                {% set ns2 = namespace(all_unavail=true) %}
-                {% for eid in all_eids %}
-                  {% if states(eid) != 'unavailable' %}
-                    {% set ns2.all_unavail = false %}
-                  {% endif %}
-                {% endfor %}
-                {% if ns2.all_unavail and all_eids | count > 0 %}
-                  {% set ns.seen = ns.seen + [did] %}
-                  {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
-                {% endif %}
-              {% else %}
-                {% set ns.seen = ns.seen + [did] %}
-                {% set ns.items = ns.items + [device_attr(did, 'name') | default(s.name)] %}
-              {% endif %}
-            {% endif %}
-          {% endif %}
+      {# Single source of truth: the offline_devices integration (global scope).
+         It already detects devices whose entities are all unavailable and skips
+         disabled / 'intermittent'-labelled devices. The blueprint's own
+         exclusions (explicit devices, labels, mobile apps, battery dedup) are
+         still applied on top. The "strict" toggle no longer affects this list —
+         the integration is always strict. #}
+      {% set src = 'binary_sensor.offline_devices_devices_offline' %}
+      {% set ids = state_attr(src, 'device_ids') or [] %}
+      {% set names = state_attr(src, 'devices') or [] %}
+      {% set mobile_dids = (mobile | map('device_id') | select('string') | list) if mobile else [] %}
+      {% for i in range(ids | length) %}
+        {% set did = ids[i] %}
+        {% if did not in ns.seen and did not in excl_dids and did not in lbl_excl_dids
+           and did not in ns.battery_dids and did not in mobile_dids %}
+          {% set ns.seen = ns.seen + [did] %}
+          {% set ns.items = ns.items + [names[i]] %}
         {% endif %}
       {% endfor %}
     {% endif %}
