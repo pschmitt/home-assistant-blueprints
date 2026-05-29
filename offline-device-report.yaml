@@ -78,7 +78,8 @@ blueprint:
             Notify when a device goes offline. Sourced from the offline_devices
             integration (binary_sensor.offline_devices_devices_offline), which
             reports devices whose entities are all unavailable. Requires that
-            integration to be set up.
+            integration to be set up:
+            https://github.com/pschmitt/homeassistant-offline-devices
           default: false
           selector:
             boolean: {}
