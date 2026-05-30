@@ -1,89 +1,127 @@
 blueprint:
   name: Simple Motion Light With Timer
-  description: Motion-controlled light with lux gating, a time window, fixed day/night brightness, and a UI timer.
+  description: >
+    Turn a light on when motion is detected, keep it on with a visible timer,
+    and turn it off after all motion has cleared. Includes lux gating, an
+    active time window, and separate day/night brightness levels.
   domain: automation
   input:
-    motion_sensors:
-      name: 👀 Motion sensors
-      selector:
-        entity:
-          domain: binary_sensor
-          multiple: true
-    light_entity:
-      name: 💡 Light
-      selector:
-        entity:
-          domain: light
-    timer_entity:
-      name: ⏲️ Timer
-      selector:
-        entity:
-          domain: timer
-    lux_sensor:
-      name: 🔆 Lux sensor
-      selector:
-        entity:
-          domain: sensor
-    max_lux:
-      name: 🔢 Maximum lux
-      default: 300
-      selector:
-        number:
-          min: 0.0
-          max: 2000.0
-          unit_of_measurement: lx
-          step: 1.0
-          mode: slider
-    after_time:
-      name: 🌅 Active after
-      default: "06:00:00"
-      selector:
-        time: {}
-    before_time:
-      name: 🌇 Active before
-      default: "23:00:00"
-      selector:
-        time: {}
-    off_delay_minutes:
-      name: ⏳ Off delay
-      default: 5
-      selector:
-        number:
-          min: 0.0
-          max: 60.0
-          unit_of_measurement: minutes
-          step: 1.0
-          mode: slider
-    night_start:
-      name: 🌙 Night starts at
-      default: "16:00:00"
-      selector:
-        time: {}
-    night_end:
-      name: 🌞 Night ends at
-      default: "03:00:00"
-      selector:
-        time: {}
-    day_brightness:
-      name: ☀️ Day brightness
-      default: 85
-      selector:
-        number:
-          min: 1.0
-          max: 100.0
-          unit_of_measurement: "%"
-          step: 1.0
-          mode: slider
-    night_brightness:
-      name: 🌜 Night brightness
-      default: 33
-      selector:
-        number:
-          min: 1.0
-          max: 100.0
-          unit_of_measurement: "%"
-          step: 1.0
-          mode: slider
+    entities:
+      name: Entities
+      icon: mdi:devices
+      description: Pick the motion sensors, controlled light, timer helper, and lux sensor used by this automation.
+      input:
+        motion_sensors:
+          name: 👀 Motion sensors
+          description: One or more binary sensors that turn the light on and keep the timer alive while any sensor is on.
+          selector:
+            entity:
+              domain: binary_sensor
+              multiple: true
+        light_entity:
+          name: 💡 Light
+          description: The light entity this automation turns on and off.
+          selector:
+            entity:
+              domain: light
+        timer_entity:
+          name: ⏲️ Timer
+          description: A timer helper used as the visible off countdown. It is started, restarted, or canceled by the automation.
+          selector:
+            entity:
+              domain: timer
+        lux_sensor:
+          name: 🔆 Lux sensor
+          description: Sensor used to decide whether the room is dark enough before turning the light on.
+          selector:
+            entity:
+              domain: sensor
+
+    activation:
+      name: Activation rules
+      icon: mdi:motion-sensor
+      description: Control when motion is allowed to turn the light on.
+      input:
+        max_lux:
+          name: 🔢 Maximum lux
+          description: Motion only turns the light on when the lux sensor is below this value. If the light is already on, motion still restarts the timer.
+          default: 300
+          selector:
+            number:
+              min: 0.0
+              max: 2000.0
+              unit_of_measurement: lx
+              step: 1.0
+              mode: slider
+        after_time:
+          name: 🌅 Active after
+          description: Earliest time of day when motion is allowed to turn the light on.
+          default: "06:00:00"
+          selector:
+            time: {}
+        before_time:
+          name: 🌇 Active before
+          description: Latest time of day when motion is allowed to turn the light on.
+          default: "23:00:00"
+          selector:
+            time: {}
+
+    timer:
+      name: Timer behavior
+      icon: mdi:timer-outline
+      description: Configure how long the light remains on after motion has cleared.
+      input:
+        off_delay_minutes:
+          name: ⏳ Off delay
+          description: Minutes to keep the light on after the last motion sensor turns off. New motion restarts this timer.
+          default: 5
+          selector:
+            number:
+              min: 0.0
+              max: 60.0
+              unit_of_measurement: minutes
+              step: 1.0
+              mode: slider
+
+    brightness:
+      name: Brightness
+      icon: mdi:brightness-6
+      description: Set separate brightness levels for daytime and nighttime operation.
+      input:
+        night_start:
+          name: 🌙 Night starts at
+          description: Time when the automation starts using the night brightness value. Supports ranges that cross midnight.
+          default: "16:00:00"
+          selector:
+            time: {}
+        night_end:
+          name: 🌞 Night ends at
+          description: Time when the automation returns to the day brightness value.
+          default: "03:00:00"
+          selector:
+            time: {}
+        day_brightness:
+          name: ☀️ Day brightness
+          description: Brightness percentage used outside the configured night period.
+          default: 85
+          selector:
+            number:
+              min: 1.0
+              max: 100.0
+              unit_of_measurement: "%"
+              step: 1.0
+              mode: slider
+        night_brightness:
+          name: 🌜 Night brightness
+          description: Brightness percentage used between night start and night end.
+          default: 33
+          selector:
+            number:
+              min: 1.0
+              max: 100.0
+              unit_of_measurement: "%"
+              step: 1.0
+              mode: slider
 
 mode: restart
 max_exceeded: silent
