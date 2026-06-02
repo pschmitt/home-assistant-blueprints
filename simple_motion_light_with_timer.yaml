@@ -65,6 +65,14 @@ blueprint:
           default: "23:00:00"
           selector:
             time: {}
+        enforce_time_window:
+          name: 🕐 Enforce time window
+          description: >
+            When enabled (default), motion only turns the light on within the Active after/before window.
+            Disable to allow motion to trigger the light at any hour.
+          default: true
+          selector:
+            boolean: {}
 
     timer:
       name: Timer behavior
@@ -139,6 +147,7 @@ variables:
   night_end: !input night_end
   day_brightness: !input day_brightness
   night_brightness: !input night_brightness
+  enforce_time_window: !input enforce_time_window
   brightness_pct: >-
     {% set now_time = now().strftime('%H:%M:%S') %}
     {% if night_start <= night_end %}
@@ -194,9 +203,18 @@ action:
                       duration:
                         minutes: !input off_delay_minutes
             default:
-              - condition: time
-                after: !input after_time
-                before: !input before_time
+              - condition: template
+                value_template: >-
+                  {% if not enforce_time_window %}
+                    true
+                  {% else %}
+                    {% set t = now().strftime('%H:%M:%S') %}
+                    {% if after_time <= before_time %}
+                      {{ after_time <= t < before_time }}
+                    {% else %}
+                      {{ t >= after_time or t < before_time }}
+                    {% endif %}
+                  {% endif %}
               - condition: template
                 value_template: "{{ states(lux_sensor) | float(99999) < (max_lux | float) }}"
               - action: light.turn_on
