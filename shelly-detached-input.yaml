@@ -128,6 +128,16 @@ blueprint:
           default: []
           selector:
             action: {}
+        smart_mode_switch:
+          name: "🧠 Optional smart mode switch"
+          description: >-
+            Optional switch that controls whether this automation should react
+            to the detached input. When supplied, the automation only runs while
+            the switch is on.
+          default:
+          selector:
+            entity:
+              domain: switch
 
 mode: restart
 
@@ -142,6 +152,7 @@ variables:
   fallback_off_threshold_w: !input fallback_off_threshold_w
   fallback_power_cycle_delay: !input fallback_power_cycle_delay
   custom_action: !input custom_action
+  smart_mode_switch: !input smart_mode_switch
 
 trigger:
   - platform: state
@@ -157,6 +168,11 @@ condition:
         and trigger.from_state.state in ['on', 'off']
         and trigger.from_state.state != trigger.to_state.state
         and trigger.to_state.state in ['on', 'off']
+        and (
+          smart_mode_switch is none
+          or smart_mode_switch == ''
+          or states(smart_mode_switch) in ['on', 'unavailable', 'unknown']
+        )
       }}
 
 action:
