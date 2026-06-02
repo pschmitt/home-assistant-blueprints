@@ -71,49 +71,36 @@ blueprint:
           default:
           selector:
             color_temp:
-        fallback_power_sensor:
-          name: "⚡ Optional fallback power sensor"
+        bulb_status_sensor:
+          name: "💡 Optional Smart Bulb Status sensor"
           description: >-
-            Optional power sensor for the smart light circuit. When the smart
-            light itself is unavailable, or when the bulb does not react to a
-            toggle command, the blueprint can use this reading to decide
-            whether the bulb is effectively on or off while the relay is still
-            on.
+            Optional Smart Bulb Status binary sensor for this circuit (from the
+            Smart Bulb Relay integration). When the smart light entity is
+            unavailable, the blueprint uses this sensor to decide whether the
+            bulb is on or off. It also serves as a fallback confirmation that
+            a toggle command took effect.
           default:
           selector:
             entity:
               filter:
-                - domain: sensor
-                  device_class: power
+                - domain: binary_sensor
+                  device_class: light
         light_state_change_timeout:
           name: "⌛ Light state change timeout"
           description: >-
             How long to wait for the smart bulb to react after the blueprint
             sends its built-in on or off command. If the expected light state
-            or power draw is not observed within this window, the Shelly relay
-            is toggled as a recovery step.
+            is not observed within this window, the Shelly relay is toggled as
+            a recovery step.
           default:
             seconds: 1
           selector:
             duration:
-        fallback_off_threshold_w:
-          name: "📏 Fallback off threshold"
-          description: >-
-            When the smart light is unavailable, readings at or below this
-            wattage are treated as "light off" and trigger a relay power-cycle.
-          default: 1
-          selector:
-            number:
-              min: 0.0
-              max: 25.0
-              unit_of_measurement: "W"
-              step: 0.1
-              mode: box
         fallback_power_cycle_delay:
           name: "⏱️ Fallback power-cycle delay"
           description: >-
             Delay between turning the relay off and back on when the unavailable
-            smart light is inferred to be off from the fallback power reading.
+            smart light is inferred to be off from the Smart Bulb Status sensor.
           default:
             milliseconds: 800
           selector:
@@ -147,9 +134,8 @@ variables:
   target_light: !input target_light
   brightness_pct: !input brightness_pct
   light_color_temp: !input light_color_temp
-  fallback_power_sensor: !input fallback_power_sensor
+  bulb_status_sensor: !input bulb_status_sensor
   light_state_change_timeout: !input light_state_change_timeout
-  fallback_off_threshold_w: !input fallback_off_threshold_w
   fallback_power_cycle_delay: !input fallback_power_cycle_delay
   custom_action: !input custom_action
   smart_mode_switch: !input smart_mode_switch
@@ -184,24 +170,13 @@ action:
         {{ states(target_light) not in ['unavailable', 'unknown'] }}
       expected_light_state: "{{ 'off' if is_state(target_light, 'on') else 'on' }}"
       relay_is_on: "{{ is_state(shelly_relay, 'on') }}"
-      fallback_power_sensor_available: >-
+      bulb_status_available: >-
         {{
-          fallback_power_sensor is not none
-          and states(fallback_power_sensor) not in ['unavailable', 'unknown']
+          bulb_status_sensor is not none
+          and bulb_status_sensor != ''
+          and states(bulb_status_sensor) in ['on', 'off']
         }}
-      fallback_power_w: >-
-        {% if fallback_power_sensor is not none %}
-          {{ states(fallback_power_sensor) | float(0) }}
-        {% else %}
-          0
-        {% endif %}
-      power_before_cmd: >-
-        {% if fallback_power_sensor is not none
-             and states(fallback_power_sensor) not in ['unavailable', 'unknown'] %}
-          {{ states(fallback_power_sensor) | float(0) }}
-        {% else %}
-          0
-        {% endif %}
+      bulb_is_on: "{{ is_state(bulb_status_sensor, 'on') }}"
   - if:
       - condition: template
         value_template: "{{ not smart_light_available }}"
@@ -216,16 +191,14 @@ action:
                   entity_id: !input shelly_relay
           - conditions:
               - condition: template
-                value_template: "{{ fallback_power_sensor_available }}"
-              - condition: template
-                value_template: "{{ fallback_power_w > (fallback_off_threshold_w | float(0)) }}"
+                value_template: "{{ bulb_status_available and bulb_is_on }}"
             sequence:
               - action: switch.turn_off
                 target:
                   entity_id: !input shelly_relay
           - conditions:
               - condition: template
-                value_template: "{{ fallback_power_sensor_available }}"
+                value_template: "{{ bulb_status_available }}"
             sequence:
               - action: switch.turn_off
                 target:
@@ -284,19 +257,8 @@ action:
                   {{
                     is_state(target_light, expected_light_state)
                     or (
-                      fallback_power_sensor is not none
-                      and states(fallback_power_sensor) not in ['unavailable', 'unknown']
-                      and (
-                        (
-                          expected_light_state == 'off'
-                          and (states(fallback_power_sensor) | float(0)) < (power_before_cmd - (fallback_off_threshold_w | float(0)))
-                        )
-                        or
-                        (
-                          expected_light_state == 'on'
-                          and (states(fallback_power_sensor) | float(0)) > (power_before_cmd + (fallback_off_threshold_w | float(0)))
-                        )
-                      )
+                      bulb_status_available
+                      and is_state(bulb_status_sensor, expected_light_state)
                     )
                   }}
                 timeout: !input light_state_change_timeout
