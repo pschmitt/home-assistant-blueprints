@@ -9,7 +9,7 @@ blueprint:
     entities:
       name: Entities
       icon: mdi:devices
-      description: Pick the motion sensors, controlled light, timer helper, and lux sensor used by this automation.
+      description: Pick the motion sensors, controlled light, and timer helper used by this automation.
       input:
         motion_sensors:
           name: 👀 Motion sensors
@@ -30,29 +30,20 @@ blueprint:
           selector:
             entity:
               domain: timer
-        lux_sensor:
-          name: 🔆 Lux sensor
-          description: Sensor used to decide whether the room is dark enough before turning the light on.
-          selector:
-            entity:
-              domain: sensor
 
-    activation:
-      name: Activation rules
-      icon: mdi:motion-sensor
-      description: Control when motion is allowed to turn the light on.
+    time_window:
+      name: Time window
+      icon: mdi:clock-outline
+      description: Restrict when motion is allowed to turn the light on.
       input:
-        max_lux:
-          name: 🔢 Maximum lux
-          description: Motion only turns the light on when the lux sensor is below this value. If the light is already on, motion still restarts the timer.
-          default: 300
+        enforce_time_window:
+          name: 🕐 Enforce time window
+          description: >
+            When enabled (default), motion only turns the light on within the Active after/before window.
+            Disable to allow motion to trigger the light at any hour.
+          default: true
           selector:
-            number:
-              min: 0.0
-              max: 2000.0
-              unit_of_measurement: lx
-              step: 1.0
-              mode: slider
+            boolean: {}
         after_time:
           name: 🌅 Active after
           description: Earliest time of day when motion is allowed to turn the light on.
@@ -65,14 +56,38 @@ blueprint:
           default: "23:00:00"
           selector:
             time: {}
-        enforce_time_window:
-          name: 🕐 Enforce time window
+
+    lux:
+      name: Lux gating
+      icon: mdi:brightness-7
+      description: Prevent the light from turning on when the room is already bright enough.
+      input:
+        enable_lux_gating:
+          name: 🔆 Enable lux gating
           description: >
-            When enabled (default), motion only turns the light on within the Active after/before window.
-            Disable to allow motion to trigger the light at any hour.
+            When enabled (default), motion only turns the light on when the lux sensor reads below the
+            configured threshold. Disable to ignore ambient light level entirely.
           default: true
           selector:
             boolean: {}
+        lux_sensor:
+          name: 🔆 Lux sensor
+          description: Sensor used to decide whether the room is dark enough before turning the light on.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+        max_lux:
+          name: 🔢 Maximum lux
+          description: Motion only turns the light on when the lux sensor is below this value. If the light is already on, motion still restarts the timer.
+          default: 300
+          selector:
+            number:
+              min: 0.0
+              max: 2000.0
+              unit_of_measurement: lx
+              step: 1.0
+              mode: slider
 
     timer:
       name: Timer behavior
@@ -96,6 +111,14 @@ blueprint:
       icon: mdi:brightness-6
       description: Set separate brightness levels for daytime and nighttime operation.
       input:
+        enable_custom_brightness:
+          name: 🌓 Custom brightness
+          description: >
+            When enabled (default), the light is turned on at the configured day/night brightness levels.
+            Disable to let Home Assistant use the light's default or last-known brightness.
+          default: true
+          selector:
+            boolean: {}
         night_start:
           name: 🌙 Night starts at
           description: Time when the automation starts using the night brightness value. Supports ranges that cross midnight.
@@ -138,16 +161,18 @@ variables:
   motion_sensors: !input motion_sensors
   light_entity: !input light_entity
   timer_entity: !input timer_entity
+  enforce_time_window: !input enforce_time_window
+  after_time: !input after_time
+  before_time: !input before_time
+  enable_lux_gating: !input enable_lux_gating
   lux_sensor: !input lux_sensor
   max_lux: !input max_lux
   off_delay_minutes: !input off_delay_minutes
-  after_time: !input after_time
-  before_time: !input before_time
+  enable_custom_brightness: !input enable_custom_brightness
   night_start: !input night_start
   night_end: !input night_end
   day_brightness: !input day_brightness
   night_brightness: !input night_brightness
-  enforce_time_window: !input enforce_time_window
   brightness_pct: >-
     {% set now_time = now().strftime('%H:%M:%S') %}
     {% if night_start <= night_end %}
@@ -216,12 +241,26 @@ action:
                     {% endif %}
                   {% endif %}
               - condition: template
-                value_template: "{{ states(lux_sensor) | float(99999) < (max_lux | float) }}"
-              - action: light.turn_on
-                target:
-                  entity_id: !input light_entity
-                data:
-                  brightness_pct: "{{ brightness_pct }}"
+                value_template: >-
+                  {% if not enable_lux_gating %}
+                    true
+                  {% else %}
+                    {{ states(lux_sensor) | float(99999) < (max_lux | float) }}
+                  {% endif %}
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ enable_custom_brightness }}"
+                    sequence:
+                      - action: light.turn_on
+                        target:
+                          entity_id: !input light_entity
+                        data:
+                          brightness_pct: "{{ brightness_pct }}"
+                default:
+                  - action: light.turn_on
+                    target:
+                      entity_id: !input light_entity
               - action: timer.start
                 target:
                   entity_id: !input timer_entity
