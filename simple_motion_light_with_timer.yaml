@@ -9,7 +9,7 @@ blueprint:
     entities:
       name: Entities
       icon: mdi:devices
-      description: Pick the motion sensors, controlled light, and timer helper used by this automation.
+      description: Pick the motion sensors and controlled light used by this automation.
       input:
         motion_sensors:
           name: 👀 Motion sensors
@@ -24,12 +24,6 @@ blueprint:
           selector:
             entity:
               domain: light
-        timer_entity:
-          name: ⏲️ Timer
-          description: A timer helper used as the visible off countdown. It is started, restarted, or canceled by the automation.
-          selector:
-            entity:
-              domain: timer
 
     time_window:
       name: Time window
@@ -94,6 +88,12 @@ blueprint:
       icon: mdi:timer-outline
       description: Configure how long the light remains on after motion has cleared.
       input:
+        timer_entity:
+          name: ⏲️ Timer
+          description: A timer helper used as the visible off countdown. It is started, restarted, or canceled by the automation.
+          selector:
+            entity:
+              domain: timer
         off_delay_minutes:
           name: ⏳ Off delay
           description: Minutes to keep the light on after the last motion sensor turns off. New motion restarts this timer.
