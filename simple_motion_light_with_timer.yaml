@@ -25,6 +25,29 @@ blueprint:
             entity:
               domain: light
 
+    timer:
+      name: Timer behavior
+      icon: mdi:timer-outline
+      description: Configure how long the light remains on after motion has cleared.
+      input:
+        timer_entity:
+          name: ⏲️ Timer
+          description: A timer helper used as the visible off countdown. It is started, restarted, or canceled by the automation.
+          selector:
+            entity:
+              domain: timer
+        off_delay_minutes:
+          name: ⏳ Off delay
+          description: Minutes to keep the light on after the last motion sensor turns off. New motion restarts this timer.
+          default: 5
+          selector:
+            number:
+              min: 0.0
+              max: 60.0
+              unit_of_measurement: minutes
+              step: 1.0
+              mode: slider
+
     time_window:
       name: Time window
       icon: mdi:clock-outline
@@ -80,29 +103,6 @@ blueprint:
               min: 0.0
               max: 2000.0
               unit_of_measurement: lx
-              step: 1.0
-              mode: slider
-
-    timer:
-      name: Timer behavior
-      icon: mdi:timer-outline
-      description: Configure how long the light remains on after motion has cleared.
-      input:
-        timer_entity:
-          name: ⏲️ Timer
-          description: A timer helper used as the visible off countdown. It is started, restarted, or canceled by the automation.
-          selector:
-            entity:
-              domain: timer
-        off_delay_minutes:
-          name: ⏳ Off delay
-          description: Minutes to keep the light on after the last motion sensor turns off. New motion restarts this timer.
-          default: 5
-          selector:
-            number:
-              min: 0.0
-              max: 60.0
-              unit_of_measurement: minutes
               step: 1.0
               mode: slider
 
