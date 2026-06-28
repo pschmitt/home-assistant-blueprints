@@ -194,15 +194,17 @@ trigger:
     id: activity_on
     to: "on"
 
-  # Door open/close
+  # Door open/close — from: guards prevent unavailable→on/off from triggering
   - platform: state
     entity_id: !input door_sensor
     id: door_opened
+    from: "off"
     to: "on"
 
   - platform: state
     entity_id: !input door_sensor
     id: door_closed
+    from: "on"
     to: "off"
 
   # Timer finished
