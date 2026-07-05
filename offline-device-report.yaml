@@ -163,7 +163,7 @@ variables:
       {% set ns.items = ns.items + (label_devices(lbl) | list) %}
     {% endfor %}
     {{ ns.items }}
-  battery_list: >
+  battery_entries: >
     {% set mobile = integration_entities('mobile_app') if ignore_mobile_devices else [] %}
     {% set excl_eids = exclude.entity_id | default([]) %}
     {% set excl_dids = exclude.device_id | default([]) %}
@@ -178,7 +178,7 @@ variables:
           {% set did = device_id(s.entity_id) %}
           {% if did is none or (did not in excl_dids and did not in lbl_excl_dids
                and device_attr(did, 'disabled_by') is none) %}
-            {% set ns.items = ns.items + [s.name] %}
+            {% set ns.items = ns.items + [{'entity_id': s.entity_id, 'name': s.name}] %}
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -191,12 +191,14 @@ variables:
           {% set did = device_id(s.entity_id) %}
           {% if did is none or (did not in excl_dids and did not in lbl_excl_dids
                and device_attr(did, 'disabled_by') is none) %}
-            {% set ns.items = ns.items + [s.name] %}
+            {% set ns.items = ns.items + [{'entity_id': s.entity_id, 'name': s.name}] %}
           {% endif %}
         {% endif %}
       {% endfor %}
     {% endif %}
-    {{ ns.items | sort | join('\n') }}
+    {{ ns.items | sort(attribute='name') }}
+  battery_list: >
+    {{ battery_entries | map(attribute='name') | list | join('\n') }}
   battery_count: >
     {% set bl = battery_list | trim %}
     {{ (bl.count('\n') + 1) if bl else 0 }}
@@ -286,6 +288,53 @@ condition:
       {{ (battery_list | trim | length > 0) or (offline_list | trim | length > 0) }}
 
 action:
+  - if:
+      - condition: template
+        value_template: "{{ battery_entries | length > 0 }}"
+    then:
+      - action: recorder.get_statistics
+        data:
+          start_time: "{{ (now() - timedelta(days=90)).isoformat() }}"
+          end_time: "{{ now().isoformat() }}"
+          statistic_ids: "{{ battery_entries | map(attribute='entity_id') | list }}"
+          period: hour
+          types:
+            - mean
+        response_variable: battery_stats
+  - variables:
+      # Re-render battery_list with the last known battery % (from long-term
+      # statistics) appended, now that recorder.get_statistics has run. This
+      # can't happen in the top-level variables: block above since that runs
+      # before any action/service call is available.
+      battery_list: >
+        {% set stats = (battery_stats.statistics | default({})) if battery_stats is defined else {} %}
+        {% set ns = namespace(items=[]) %}
+        {% for e in battery_entries %}
+          {% set ns2 = namespace(last=none) %}
+          {% for p in stats.get(e.entity_id, []) %}
+            {% if p.mean is not none %}
+              {% set ns2.last = p.mean %}
+            {% endif %}
+          {% endfor %}
+          {% set suffix = ' (last: ' ~ (ns2.last | round(0) | int) ~ '%)' if ns2.last is not none else '' %}
+          {% set ns.items = ns.items + [e.name ~ suffix] %}
+        {% endfor %}
+        {{ ns.items | join('\n') }}
+      report: >
+        {% set ns = namespace(parts=[]) %}
+        {% set bl = battery_list | trim %}
+        {% set ol = offline_list | trim %}
+        {% if bl %}
+          {% set header = '🔋 Offline battery devices (' ~ (battery_count | trim) ~ '):' %}
+          {% set body = '• ' ~ (bl | replace('\n', '\n• ')) %}
+          {% set ns.parts = ns.parts + [header ~ '\n' ~ body] %}
+        {% endif %}
+        {% if ol %}
+          {% set header = '📡 Offline devices (' ~ (offline_count | trim) ~ '):' %}
+          {% set body = '• ' ~ (ol | replace('\n', '\n• ')) %}
+          {% set ns.parts = ns.parts + [header ~ '\n' ~ body] %}
+        {% endif %}
+        {{ ns.parts | join('\n\n') }}
   - choose: []
     default: !input actions
 
